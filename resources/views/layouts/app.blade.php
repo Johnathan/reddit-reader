@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <title>@yield('title', 'reader')</title>
+    <link rel="icon" href="data:,">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = { darkMode: 'class' };
+    </script>
+    <style>
+        html { color-scheme: dark; }
+        body { -webkit-tap-highlight-color: transparent; }
+        .reddit-html a { color: #fdba74; text-decoration: underline; text-underline-offset: 2px; }
+        .reddit-html p { margin: 0.5em 0; }
+        .reddit-html blockquote { border-left: 3px solid #52525b; padding-left: 0.75em; margin: 0.5em 0; color: #a1a1aa; }
+        .reddit-html pre { background: #18181b; padding: 0.5em; border-radius: 0.5em; overflow-x: auto; }
+        .reddit-html code { background: #27272a; padding: 0.1em 0.3em; border-radius: 0.25em; font-size: 0.9em; }
+        .reddit-html pre code { background: none; padding: 0; }
+        .reddit-html ul, .reddit-html ol { margin: 0.5em 0; padding-left: 1.5em; }
+        .reddit-html ul { list-style-type: disc; }
+        .reddit-html ol { list-style-type: decimal; }
+        .reddit-html table { border-collapse: collapse; display: block; overflow-x: auto; }
+        .reddit-html th, .reddit-html td { border: 1px solid #3f3f46; padding: 0.3em 0.6em; }
+        .nsfw-img { transition: filter 0.15s ease; cursor: pointer; }
+    </style>
+</head>
+<body class="bg-neutral-950 text-neutral-100 min-h-screen antialiased">
+    @include('partials.nav')
+
+    <main class="max-w-2xl mx-auto px-3 pb-24 pt-4">
+        @if (session('status'))
+            <div class="mb-4 rounded-lg bg-emerald-900/40 border border-emerald-700 text-emerald-200 px-3 py-2 text-sm">
+                {{ session('status') }}
+            </div>
+        @endif
+
+        @yield('content')
+    </main>
+</body>
+</html>

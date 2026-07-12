@@ -10,26 +10,13 @@ endpoints — no posting, read only.
 php artisan serve
 ```
 
-1. **Reddit credentials — required, do this first.** Reddit blocks *anonymous*
-   access to the JSON endpoints (this is not an IP block and cannot be spoofed
-   past: browser user-agents, full Chrome header sets and TLS-fingerprint
-   impersonation were all tried and all get 403. Your phone works only because
-   it's logged in). OAuth is the supported path. Create an app at
-   <https://www.reddit.com/prefs/apps> → "create another app" → type
-   **script**, name anything, redirect uri `http://localhost:8000`. Paste the
-   id (string under the app name) and secret into `.env`:
-
-   ```
-   REDDIT_CLIENT_ID=...
-   REDDIT_CLIENT_SECRET=...
-   ```
-
-   With credentials set, requests go to `oauth.reddit.com` with an app-only
-   token (auto-minted and cached ~50 min), which is not blocked. Verify with:
+1. **Check Reddit connectivity** (no credentials needed — see below):
 
    ```sh
    php artisan reddit:check
    ```
+
+   Should print the top 5 posts from r/programming.
 
 2. **Passkey**: visit <http://localhost:8000> — you'll be walked to `/setup`,
    which creates your user and registers your first passkey (Touch ID). This
@@ -46,6 +33,39 @@ php artisan serve
 - `/r/{sub}/comments/{id}` — post + threaded comments (collapse, depth-capped)
 - `/subs` — manage subscriptions + subreddit search
 - `/settings/passkeys` — enroll/remove passkeys
+
+## How it gets the JSON (the interesting part)
+
+Hitting `reddit.com/r/x/hot.json` from a script gets a **403**. It looks like an
+IP ban, but it isn't: Reddit serves logged-out traffic a *JavaScript challenge*
+page ("Please wait for verification"). A browser runs the script and gets a
+clearance cookie; `curl` can't run JS, so it never gets one and everything 403s.
+
+The challenge is not a real bot-detector. The page ships:
+
+```js
+await (async e => e + e)("<hex seed>")
+```
+
+— the answer is just the seed concatenated with itself, proof you can execute
+JS. `Reddit::solveChallenge()` parses out the seed and the form token, submits
+the solution back, and banks the resulting cookies in a `FileCookieJar` at
+`storage/app/reddit-cookies.json`. Subsequent requests reuse the cookie; on a
+403 it re-solves once and retries. **No API key, no OAuth app, no account.**
+
+If Reddit ever changes the puzzle's shape, the seed regex stops matching and the
+app throws `challengeChanged()` loudly rather than silently retrying — that's
+the signal to go look at the new challenge script.
+
+`php artisan reddit:check --fresh` throws away the cookies and forces a full
+cold solve, which is the fastest way to confirm the whole path still works.
+
+### OAuth (optional, not required)
+
+If `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` are ever set in `.env` (a
+"script" app from <https://www.reddit.com/prefs/apps>), the client prefers
+`oauth.reddit.com` with an app-only token and skips the challenge entirely.
+Worth doing only if you start hitting rate limits.
 
 ## Notes
 

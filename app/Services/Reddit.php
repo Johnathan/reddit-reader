@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Exceptions\RedditException;
+use GuzzleHttp\Cookie\CookieJar;
+use GuzzleHttp\Cookie\FileCookieJar;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
@@ -27,6 +29,10 @@ class Reddit
     protected const TOKEN_CACHE_KEY = 'reddit:oauth:token';
 
     protected const USER_AGENT = 'macos:personal-reddit-reader:v1.0 (personal single-user reader)';
+
+    protected const BROWSER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
+
+    protected ?CookieJar $jar = null;
 
     protected const SORTS = ['hot', 'new', 'top', 'rising', 'best'];
 
@@ -144,13 +150,12 @@ class Reddit
      *
      * @param  array<string, mixed>  $query
      */
-    protected function request(string $path, array $query): ?array
+    protected function request(string $path, array $query, bool $retryingAfterChallenge = false): ?array
     {
         try {
-            $client = Http::withHeaders([
-                'User-Agent' => self::USER_AGENT,
-            ])
-                ->timeout(8)
+            $client = Http::withHeaders($this->browserHeaders())
+                ->withOptions(['cookies' => $this->cookieJar()])
+                ->timeout(12)
                 ->connectTimeout(5);
 
             $baseUrl = self::BASE_URL;
@@ -163,6 +168,16 @@ class Reddit
             $response = $client->get($baseUrl.$path, $query);
         } catch (ConnectionException $e) {
             throw RedditException::timedOut();
+        }
+
+        // Reddit gates logged-out traffic behind a JS challenge. Without a
+        // clearance cookie the JSON endpoints 403 (or the challenge page is
+        // served in place of the JSON). Solve it, then retry exactly once.
+        if (! $retryingAfterChallenge && ! $this->accessToken()
+            && ($response->status() === 403 || $this->isChallenge($response->body()))) {
+            $this->solveChallenge();
+
+            return $this->request($path, $query, retryingAfterChallenge: true);
         }
 
         // An expired/revoked token comes back as 401; drop it so the next
@@ -196,8 +211,102 @@ class Reddit
     }
 
     /**
+     * Headers a real browser sends. Reddit serves its JS challenge (rather than
+     * a hard 403) to clients that look like browsers, and the challenge is the
+     * thing we can actually solve — so we present as one.
+     */
+    protected function browserHeaders(): array
+    {
+        return [
+            'User-Agent' => self::BROWSER_USER_AGENT,
+            'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language' => 'en-GB,en;q=0.9',
+        ];
+    }
+
+    /**
+     * One cookie jar for the life of this instance, persisted to disk so the
+     * clearance cookie survives across requests (and app restarts) instead of
+     * re-solving the challenge on every page load.
+     */
+    protected function cookieJar(): CookieJar
+    {
+        return $this->jar ??= new FileCookieJar(storage_path('app/reddit-cookies.json'), true);
+    }
+
+    /**
+     * Is this response Reddit's "Please wait for verification" interstitial
+     * rather than the content we asked for?
+     */
+    protected function isChallenge(string $body): bool
+    {
+        return str_contains($body, 'js_challenge') || str_contains($body, 'Please wait for verification');
+    }
+
+    /**
+     * Solve Reddit's logged-out JS challenge and bank the resulting cookies.
+     *
+     * The interstitial ships a one-line script of the shape
+     *
+     *     await (async e => e + e)("<hex seed>")
+     *
+     * i.e. "the answer is the seed concatenated with itself" — a proof you can
+     * run JS, not a real crypto puzzle. It then GETs the form back with that
+     * solution plus the page's token, and Reddit sets the clearance cookies
+     * that make the .json endpoints work. We do the same thing without a
+     * browser. If Reddit ever changes the puzzle shape, the seed regex stops
+     * matching and we throw rather than silently looping.
+     */
+    protected function solveChallenge(): void
+    {
+        $jar = $this->cookieJar();
+        $headers = $this->browserHeaders();
+
+        try {
+            $page = Http::withHeaders($headers)
+                ->withOptions(['cookies' => $jar])
+                ->timeout(12)
+                ->get(self::BASE_URL.'/');
+
+            $body = $page->body();
+
+            if (! $this->isChallenge($body)) {
+                return; // No challenge in the way; whatever 403'd was not this.
+            }
+
+            // (async e => e + e)("<seed>")  ->  solution is seed.seed
+            if (! preg_match('/\(\s*async\s+(\w+)\s*=>\s*\1\s*\+\s*\1\s*\)\s*\(\s*"([0-9a-f]+)"\s*\)/i', $body, $m)) {
+                throw RedditException::challengeChanged();
+            }
+
+            $seed = $m[2];
+
+            if (! preg_match('/name="token"\s+value="([^"]+)"/', $body, $t)) {
+                throw RedditException::challengeChanged();
+            }
+
+            $solved = Http::withHeaders($headers)
+                ->withOptions(['cookies' => $jar])
+                ->timeout(12)
+                ->get(self::BASE_URL.'/', [
+                    'solution' => $seed.$seed,
+                    'js_challenge' => 1,
+                    'token' => $t[1],
+                    'jsc_orig_r' => '',
+                ]);
+
+            if ($solved->failed()) {
+                throw RedditException::challengeFailed();
+            }
+        } catch (ConnectionException $e) {
+            throw RedditException::timedOut();
+        }
+    }
+
+    /**
      * App-only OAuth token (client_credentials), or null when no Reddit app
-     * credentials are configured. Tokens last an hour; cache for 50 minutes.
+     * credentials are configured. Optional — the challenge flow above needs no
+     * credentials at all — but if creds exist we prefer the official API.
      */
     protected function accessToken(): ?string
     {

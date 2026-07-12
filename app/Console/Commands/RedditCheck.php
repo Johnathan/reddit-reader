@@ -13,7 +13,7 @@ use Illuminate\Support\Facades\Cache;
  */
 class RedditCheck extends Command
 {
-    protected $signature = 'reddit:check {subreddit=programming}';
+    protected $signature = 'reddit:check {subreddit=programming} {--fresh : Discard cached cookies and re-solve the challenge from scratch}';
 
     protected $description = 'Verify Reddit API connectivity and print a sample listing';
 
@@ -25,21 +25,21 @@ class RedditCheck extends Command
 
         $this->line($hasCreds
             ? '<fg=green>✓</> Credentials found — using OAuth (oauth.reddit.com)'
-            : '<fg=yellow>!</> No REDDIT_CLIENT_ID/REDDIT_CLIENT_SECRET — falling back to public .json endpoints, which Reddit blocks from most IPs');
+            : '<fg=cyan>·</> No credentials (not needed) — using public .json + solving Reddit’s JS challenge');
 
         Cache::forget('reddit:oauth:token');
+
+        if ($this->option('fresh')) {
+            @unlink(storage_path('app/reddit-cookies.json'));
+            Cache::flush();
+            $this->line('<fg=cyan>·</> Cleared cached cookies — forcing a full challenge solve');
+        }
 
         try {
             $listing = $reddit->listing($sub, 'hot', ['limit' => 5]);
         } catch (\Throwable $e) {
             $this->newLine();
             $this->error('✗ '.$e->getMessage());
-
-            if (! $hasCreds) {
-                $this->newLine();
-                $this->line('Fix: create a <options=bold>script</> app at https://www.reddit.com/prefs/apps');
-                $this->line('then set REDDIT_CLIENT_ID and REDDIT_CLIENT_SECRET in .env');
-            }
 
             return self::FAILURE;
         }

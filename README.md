@@ -10,8 +10,11 @@ endpoints — no posting, read only.
 php artisan serve
 ```
 
-1. **Reddit credentials** (required on this network — Reddit blocks the public
-   `.json` endpoints from this IP): create an app at
+1. **Reddit credentials — required, do this first.** Reddit blocks *anonymous*
+   access to the JSON endpoints (this is not an IP block and cannot be spoofed
+   past: browser user-agents, full Chrome header sets and TLS-fingerprint
+   impersonation were all tried and all get 403. Your phone works only because
+   it's logged in). OAuth is the supported path. Create an app at
    <https://www.reddit.com/prefs/apps> → "create another app" → type
    **script**, name anything, redirect uri `http://localhost:8000`. Paste the
    id (string under the app name) and secret into `.env`:
@@ -22,8 +25,11 @@ php artisan serve
    ```
 
    With credentials set, requests go to `oauth.reddit.com` with an app-only
-   token (auto-minted and cached ~50 min). Without them the app falls back to
-   the public `.json` endpoints.
+   token (auto-minted and cached ~50 min), which is not blocked. Verify with:
+
+   ```sh
+   php artisan reddit:check
+   ```
 
 2. **Passkey**: visit <http://localhost:8000> — you'll be walked to `/setup`,
    which creates your user and registers your first passkey (Touch ID). This

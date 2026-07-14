@@ -21,6 +21,7 @@ return [
     'reddit' => [
         'client_id' => env('REDDIT_CLIENT_ID'),
         'client_secret' => env('REDDIT_CLIENT_SECRET'),
+        'user_agent' => 'macos:personal-reddit-reader:v1.0 (personal single-user reader)',
     ],
 
     'resend' => [

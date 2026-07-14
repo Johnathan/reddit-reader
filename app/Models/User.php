@@ -37,6 +37,7 @@ class User extends Authenticatable implements HasPasskeys
     {
         return [
             'email_verified_at' => 'datetime',
+            'reddit_refresh_token' => 'encrypted',
             'password' => 'hashed',
         ];
     }

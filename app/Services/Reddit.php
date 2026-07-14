@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Exceptions\RedditException;
+use App\Models\User;
 use GuzzleHttp\Cookie\CookieJar;
 use GuzzleHttp\Cookie\FileCookieJar;
 use Illuminate\Http\Client\ConnectionException;
@@ -183,7 +184,8 @@ class Reddit
         // An expired/revoked token comes back as 401; drop it so the next
         // request mints a fresh one instead of caching the failure for 90s.
         if ($response->status() === 401) {
-            Cache::forget(self::TOKEN_CACHE_KEY);
+            Cache::forget(self::TOKEN_CACHE_KEY.':user');
+            Cache::forget(self::TOKEN_CACHE_KEY.':app');
             throw RedditException::unexpected(401);
         }
 
@@ -317,15 +319,23 @@ class Reddit
             return null;
         }
 
-        return Cache::remember(self::TOKEN_CACHE_KEY, 3000, function () use ($clientId, $clientSecret) {
+        // A linked Reddit account is the only way to see age-gated (18+) subs,
+        // so prefer the user's refresh token over an app-only one when present.
+        $refreshToken = $this->userRefreshToken();
+
+        $grant = $refreshToken
+            ? ['grant_type' => 'refresh_token', 'refresh_token' => $refreshToken]
+            : ['grant_type' => 'client_credentials'];
+
+        $cacheKey = self::TOKEN_CACHE_KEY.($refreshToken ? ':user' : ':app');
+
+        return Cache::remember($cacheKey, 3000, function () use ($clientId, $clientSecret, $grant) {
             $response = Http::withBasicAuth($clientId, $clientSecret)
                 ->withHeaders(['User-Agent' => self::USER_AGENT])
                 ->asForm()
                 ->timeout(8)
                 ->connectTimeout(5)
-                ->post(self::BASE_URL.'/api/v1/access_token', [
-                    'grant_type' => 'client_credentials',
-                ]);
+                ->post(self::BASE_URL.'/api/v1/access_token', $grant);
 
             $token = $response->json('access_token');
 
@@ -335,6 +345,23 @@ class Reddit
 
             return $token;
         });
+    }
+
+    /**
+     * The signed-in user's Reddit refresh token, if they've linked an account.
+     * Falls back to null in console/queue contexts where there is no auth user.
+     */
+    protected function userRefreshToken(): ?string
+    {
+        $user = auth()->user();
+
+        if ($user && ! empty($user->reddit_refresh_token)) {
+            return $user->reddit_refresh_token;
+        }
+
+        // Single-user app: outside a request (e.g. `reddit:check`) just use the
+        // owner's token if one exists.
+        return User::query()->whereNotNull('reddit_refresh_token')->value('reddit_refresh_token');
     }
 
     /**

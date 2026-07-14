@@ -3,6 +3,46 @@
 @section('subnav-title', 'manage subscriptions')
 
 @section('content')
+    @if (session('status'))
+        <div class="rounded-lg bg-green-900/30 border border-green-700 text-green-200 px-3 py-3 text-sm mb-4">
+            {{ session('status') }}
+        </div>
+    @endif
+
+    @if (session('error'))
+        <div class="rounded-lg bg-red-900/30 border border-red-700 text-red-200 px-3 py-3 text-sm mb-4">
+            {{ session('error') }}
+        </div>
+    @endif
+
+    {{-- Reddit only serves 18+ subs to a logged-in account, so linking one is
+         the only way to see them. Everything else works without this. --}}
+    <div class="rounded-lg border border-neutral-800 bg-neutral-900/60 px-3 py-3 mb-5 flex items-center justify-between gap-3">
+        @if (auth()->user()->reddit_username)
+            <div class="text-sm">
+                <span class="text-neutral-400">Reddit account</span>
+                <span class="font-medium text-neutral-100">u/{{ auth()->user()->reddit_username }}</span>
+                <span class="block text-xs text-neutral-500 mt-0.5">18+ subreddits visible (if enabled in your Reddit prefs)</span>
+            </div>
+            <form method="POST" action="{{ route('reddit.disconnect') }}">
+                @csrf
+                @method('DELETE')
+                <button class="px-3 py-1.5 rounded-lg border border-neutral-700 text-neutral-300 text-xs hover:bg-neutral-800">
+                    Disconnect
+                </button>
+            </form>
+        @else
+            <div class="text-sm">
+                <span class="text-neutral-300">No Reddit account linked</span>
+                <span class="block text-xs text-neutral-500 mt-0.5">Link one to see 18+ subreddits &mdash; they're hidden otherwise</span>
+            </div>
+            <a href="{{ route('reddit.connect') }}"
+               class="px-3 py-1.5 rounded-lg bg-orange-500 text-white text-xs font-medium hover:bg-orange-400 whitespace-nowrap">
+                Connect Reddit
+            </a>
+        @endif
+    </div>
+
     <form method="GET" action="{{ route('subs.index') }}" class="mb-5 flex gap-2">
         <input type="text" name="q" value="{{ $q }}" placeholder="Search subreddits&hellip;"
                class="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm placeholder-neutral-500 focus:outline-none focus:border-orange-500">

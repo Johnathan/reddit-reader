@@ -60,12 +60,41 @@ the signal to go look at the new challenge script.
 `php artisan reddit:check --fresh` throws away the cookies and forces a full
 cold solve, which is the fastest way to confirm the whole path still works.
 
-### OAuth (optional, not required)
+## 18+ / NSFW subreddits
 
-If `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` are ever set in `.env` (a
-"script" app from <https://www.reddit.com/prefs/apps>), the client prefers
-`oauth.reddit.com` with an app-only token and skips the challenge entirely.
-Worth doing only if you start hitting rate limits.
+Age-gated subs are **invisible to anonymous clients** — and not with an honest
+error. `r/gonewild` (5.5M subscribers, `over18: true`) returns HTTP 200 with an
+**empty listing**, and NSFW subs are stripped from search results entirely. The
+old `over18=1` cookie trick no longer works.
+
+The only thing that lifts the gate is a **logged-in Reddit account**. To enable:
+
+1. Create an app at <https://www.reddit.com/prefs/apps> → "create another app"
+   → type **web app** (not "script" — we use the authorization-code flow).
+   Redirect URI, exactly:
+
+   ```
+   https://reddit.1707.network/reddit/callback
+   ```
+
+2. Put the id (the string under the app name) and secret in `.env`:
+
+   ```
+   REDDIT_CLIENT_ID=...
+   REDDIT_CLIENT_SECRET=...
+   ```
+
+3. Go to `/subs` and hit **Connect Reddit**. You approve on Reddit's own site —
+   your Reddit password never touches this app. We keep only the refresh token,
+   encrypted at rest.
+
+4. Make sure 18+ content is enabled in your Reddit account preferences
+   (<https://www.reddit.com/settings/preferences> → "Show mature content").
+   Reddit honours the *account's* setting; the app can't override it.
+
+Once linked, every request uses your user token against `oauth.reddit.com` and
+the JS-challenge path is bypassed entirely (it's only needed for anonymous
+browsing). Disconnect any time from `/subs`.
 
 ## Deployment — https://reddit.1707.network
 

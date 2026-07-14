@@ -67,10 +67,41 @@ If `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` are ever set in `.env` (a
 `oauth.reddit.com` with an app-only token and skips the challenge entirely.
 Worth doing only if you start hitting rate limits.
 
+## Deployment — https://reddit.1707.network
+
+Served from this Mac through a Cloudflare Tunnel. Nothing is exposed to the
+internet directly; Cloudflare terminates TLS at the edge and the tunnel carries
+traffic to `localhost:8000`. HTTPS is what makes passkeys work off-device.
+
+| Piece | Where |
+|---|---|
+| Tunnel | `reddit-reader` (`d77b73d5-b03b-4401-b641-5390566eec96`) |
+| Tunnel config | `~/.cloudflared/reddit-reader.yml` |
+| DNS | proxied CNAME `reddit.1707.network` → `<uuid>.cfargotunnel.com` |
+| App service | `~/Library/LaunchAgents/network.1707.reddit-app.plist` |
+| Tunnel service | `~/Library/LaunchAgents/network.1707.reddit-tunnel.plist` |
+| Logs | `storage/logs/serve.log`, `storage/logs/tunnel.log` |
+
+Both run under launchd with `KeepAlive`, so they start at login and restart on
+crash. To control them:
+
+```sh
+launchctl unload ~/Library/LaunchAgents/network.1707.reddit-tunnel.plist   # stop
+launchctl load   ~/Library/LaunchAgents/network.1707.reddit-tunnel.plist   # start
+launchctl list | grep reddit                                              # status (0 = healthy)
+```
+
+> **This machine hosts other tunnels** (budget, salonkit-dev, listen-dev…) that
+> share `~/.cloudflared/cert.pem`. `~/.cloudflared/config.yml` belongs to
+> *budget* — a bare `cloudflared tunnel run` would start the wrong tunnel.
+> Always pass `--config ~/.cloudflared/reddit-reader.yml`, as the plist does.
+
 ## Notes
 
-- Passkeys are bound to the hostname (`localhost` via `APP_URL`). To use it
-  from your phone you'll need an https origin (e.g. Tailscale Serve or a
-  Cloudflare tunnel) — set `APP_URL` accordingly and re-enroll passkeys; see
-  comments in `config/passkeys.php`.
+- `bootstrap/app.php` trusts all proxies. Required behind the tunnel: without
+  it Laravel sees plain HTTP, generates `http://` URLs, and WebAuthn rejects the
+  origin mismatch.
+- Passkeys are bound to the relying-party ID, which is derived from `APP_URL`
+  (now `reddit.1707.network`). Change the hostname and existing passkeys stop
+  working — they must be re-enrolled.
 - Reddit responses are cached (listings 90s, comment pages 300s, sub search 1h).

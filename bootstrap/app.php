@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //
+        // Served through a Cloudflare Tunnel, which terminates TLS and forwards
+        // over plain HTTP. Without this Laravel would think the request is http,
+        // generate http:// URLs, and WebAuthn would reject the origin mismatch.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

@@ -29,10 +29,21 @@ php artisan serve
 ## Pages
 
 - `/` — home feed (subscribed subs combined), hot/new/top sort, load-more pagination
-- `/r/{sub}` — subreddit listing with subscribe/unsubscribe
+- `/explore` — discover subreddits: what's popular now + "related to your subs"
+  (mined from the sidebars of subs you already follow), each with subscribe / add-to-feed
+- `/feeds` — custom feeds: named local multireddits
+- `/f/{slug}` — a custom feed's combined listing
+- `/r/{sub}` — subreddit listing with subscribe/unsubscribe, related-communities strip, add-to-feed
 - `/r/{sub}/comments/{id}` — post + threaded comments (collapse, depth-capped)
 - `/subs` — manage subscriptions + subreddit search
 - `/settings/passkeys` — enroll/remove passkeys
+
+## Custom feeds
+
+Feeds are **local multireddits** — a named set of subreddits you view as one
+combined listing (`/r/a+b+c`). They live in this app's database, not on Reddit,
+so they need no account. Create one on `/feeds`, then add subs from the feed
+page, any subreddit page, or the "+ feed" control on Explore/search rows.
 
 ## How it gets the JSON (the interesting part)
 
@@ -60,41 +71,13 @@ the signal to go look at the new challenge script.
 `php artisan reddit:check --fresh` throws away the cookies and forces a full
 cold solve, which is the fastest way to confirm the whole path still works.
 
-## 18+ / NSFW subreddits
+## What anonymous access can't do
 
-Age-gated subs are **invisible to anonymous clients** — and not with an honest
-error. `r/gonewild` (5.5M subscribers, `over18: true`) returns HTTP 200 with an
-**empty listing**, and NSFW subs are stripped from search results entirely. The
-old `over18=1` cookie trick no longer works.
-
-The only thing that lifts the gate is a **logged-in Reddit account**. To enable:
-
-1. Create an app at <https://www.reddit.com/prefs/apps> → "create another app"
-   → type **web app** (not "script" — we use the authorization-code flow).
-   Redirect URI, exactly:
-
-   ```
-   https://reddit.1707.network/reddit/callback
-   ```
-
-2. Put the id (the string under the app name) and secret in `.env`:
-
-   ```
-   REDDIT_CLIENT_ID=...
-   REDDIT_CLIENT_SECRET=...
-   ```
-
-3. Go to `/subs` and hit **Connect Reddit**. You approve on Reddit's own site —
-   your Reddit password never touches this app. We keep only the refresh token,
-   encrypted at rest.
-
-4. Make sure 18+ content is enabled in your Reddit account preferences
-   (<https://www.reddit.com/settings/preferences> → "Show mature content").
-   Reddit honours the *account's* setting; the app can't override it.
-
-Once linked, every request uses your user token against `oauth.reddit.com` and
-the JS-challenge path is bypassed entirely (it's only needed for anonymous
-browsing). Disconnect any time from `/subs`.
+Everything runs logged-out, which has one hard limit: **age-gated (18+)
+subreddits are invisible.** Reddit returns HTTP 200 with an *empty listing* for
+them and strips them from search. The only thing that lifts the gate is a
+logged-in Reddit account — and Reddit no longer supports the app OAuth flow this
+used to lean on, so there's no clean anonymous way in. Left out by design.
 
 ## Deployment — https://reddit.1707.network
 

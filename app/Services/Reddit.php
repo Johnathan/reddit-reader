@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Exceptions\RedditException;
-use App\Models\User;
 use GuzzleHttp\Cookie\CookieJar;
 use GuzzleHttp\Cookie\FileCookieJar;
 use Illuminate\Http\Client\ConnectionException;
@@ -11,25 +10,17 @@ use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 /**
- * Thin wrapper around Reddit's JSON endpoints (the "add .json to any URL"
- * trick), with raw_json=1 so entities come back unescaped and short-lived
+ * Thin wrapper around Reddit's public JSON endpoints (the "add .json to any
+ * URL" trick), with raw_json=1 so entities come back unescaped and short-lived
  * caching so a personal single-user reader doesn't hammer Reddit.
  *
- * Reddit blocks the public .json endpoints from many IPs, so when
- * REDDIT_CLIENT_ID / REDDIT_CLIENT_SECRET are set in .env (create an app of
- * type "script" at https://www.reddit.com/prefs/apps) the same requests are
- * sent to oauth.reddit.com with an app-only client_credentials token instead.
- * Without credentials it falls back to the public endpoints.
+ * No account, no API key, no OAuth. Reddit serves logged-out clients a JS
+ * challenge instead of the JSON; we solve it (see solveChallenge) and bank the
+ * clearance cookie. That's the whole trick — everything here is anonymous.
  */
 class Reddit
 {
     protected const BASE_URL = 'https://www.reddit.com';
-
-    protected const OAUTH_BASE_URL = 'https://oauth.reddit.com';
-
-    protected const TOKEN_CACHE_KEY = 'reddit:oauth:token';
-
-    protected const USER_AGENT = 'macos:personal-reddit-reader:v1.0 (personal single-user reader)';
 
     protected const BROWSER_USER_AGENT = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36';
 
@@ -154,19 +145,11 @@ class Reddit
     protected function request(string $path, array $query, bool $retryingAfterChallenge = false): ?array
     {
         try {
-            $client = Http::withHeaders($this->browserHeaders())
+            $response = Http::withHeaders($this->browserHeaders())
                 ->withOptions(['cookies' => $this->cookieJar()])
                 ->timeout(12)
-                ->connectTimeout(5);
-
-            $baseUrl = self::BASE_URL;
-
-            if ($token = $this->accessToken()) {
-                $client = $client->withToken($token);
-                $baseUrl = self::OAUTH_BASE_URL;
-            }
-
-            $response = $client->get($baseUrl.$path, $query);
+                ->connectTimeout(5)
+                ->get(self::BASE_URL.$path, $query);
         } catch (ConnectionException $e) {
             throw RedditException::timedOut();
         }
@@ -174,19 +157,11 @@ class Reddit
         // Reddit gates logged-out traffic behind a JS challenge. Without a
         // clearance cookie the JSON endpoints 403 (or the challenge page is
         // served in place of the JSON). Solve it, then retry exactly once.
-        if (! $retryingAfterChallenge && ! $this->accessToken()
+        if (! $retryingAfterChallenge
             && ($response->status() === 403 || $this->isChallenge($response->body()))) {
             $this->solveChallenge();
 
             return $this->request($path, $query, retryingAfterChallenge: true);
-        }
-
-        // An expired/revoked token comes back as 401; drop it so the next
-        // request mints a fresh one instead of caching the failure for 90s.
-        if ($response->status() === 401) {
-            Cache::forget(self::TOKEN_CACHE_KEY.':user');
-            Cache::forget(self::TOKEN_CACHE_KEY.':app');
-            throw RedditException::unexpected(401);
         }
 
         if ($response->status() === 429) {
@@ -306,62 +281,74 @@ class Reddit
     }
 
     /**
-     * App-only OAuth token (client_credentials), or null when no Reddit app
-     * credentials are configured. Optional — the challenge flow above needs no
-     * credentials at all — but if creds exist we prefer the official API.
+     * The most popular subreddits right now (for the Explore page).
      */
-    protected function accessToken(): ?string
+    public function popularSubreddits(array $params = []): ?array
     {
-        $clientId = config('services.reddit.client_id');
-        $clientSecret = config('services.reddit.client_secret');
+        $query = array_filter([
+            'raw_json' => 1,
+            'limit' => $params['limit'] ?? 25,
+            'after' => $params['after'] ?? null,
+        ], fn ($v) => $v !== null && $v !== '');
 
-        if (! $clientId || ! $clientSecret) {
-            return null;
-        }
+        $cacheKey = 'reddit:popular:'.md5(json_encode($query));
 
-        // A linked Reddit account is the only way to see age-gated (18+) subs,
-        // so prefer the user's refresh token over an app-only one when present.
-        $refreshToken = $this->userRefreshToken();
-
-        $grant = $refreshToken
-            ? ['grant_type' => 'refresh_token', 'refresh_token' => $refreshToken]
-            : ['grant_type' => 'client_credentials'];
-
-        $cacheKey = self::TOKEN_CACHE_KEY.($refreshToken ? ':user' : ':app');
-
-        return Cache::remember($cacheKey, 3000, function () use ($clientId, $clientSecret, $grant) {
-            $response = Http::withBasicAuth($clientId, $clientSecret)
-                ->withHeaders(['User-Agent' => self::USER_AGENT])
-                ->asForm()
-                ->timeout(8)
-                ->connectTimeout(5)
-                ->post(self::BASE_URL.'/api/v1/access_token', $grant);
-
-            $token = $response->json('access_token');
-
-            if ($response->failed() || ! is_string($token) || $token === '') {
-                throw RedditException::unexpected($response->status());
-            }
-
-            return $token;
+        return Cache::remember($cacheKey, 1800, function () use ($query) {
+            return $this->request('/subreddits/popular.json', $query);
         });
     }
 
     /**
-     * The signed-in user's Reddit refresh token, if they've linked an account.
-     * Falls back to null in console/queue contexts where there is no auth user.
+     * A subreddit's "about" record: subscriber count, description, icon, etc.
      */
-    protected function userRefreshToken(): ?string
+    public function about(string $subreddit): ?array
     {
-        $user = auth()->user();
+        $subreddit = strtolower($subreddit);
+        $cacheKey = 'reddit:about:'.$subreddit;
 
-        if ($user && ! empty($user->reddit_refresh_token)) {
-            return $user->reddit_refresh_token;
+        return Cache::remember($cacheKey, 3600, function () use ($subreddit) {
+            $data = $this->request("/r/{$subreddit}/about.json", ['raw_json' => 1]);
+
+            return $data['data'] ?? null;
+        });
+    }
+
+    /**
+     * Subreddits related to the given one, mined from its sidebar markdown.
+     *
+     * Reddit's official "related communities" widget is OAuth-only, but the
+     * sidebar (`description`) almost always links sibling subs as r/name — so
+     * we pull those out. Not exhaustive, but it needs no account and it's the
+     * curators' own hand-picked list. Names are returned lowercased, de-duped,
+     * and with the subreddit itself removed.
+     *
+     * @return array<int, string>
+     */
+    public function relatedSubreddits(string $subreddit): array
+    {
+        $about = $this->about($subreddit);
+
+        $markdown = ($about['description'] ?? '').' '.($about['public_description'] ?? '');
+
+        if (trim($markdown) === '') {
+            return [];
         }
 
-        // Single-user app: outside a request (e.g. `reddit:check`) just use the
-        // owner's token if one exists.
-        return User::query()->whereNotNull('reddit_refresh_token')->value('reddit_refresh_token');
+        preg_match_all('~(?:^|[\s(\[/])/?r/([A-Za-z0-9_]{2,21})\b~', $markdown, $matches);
+
+        $self = strtolower($subreddit);
+
+        $related = [];
+        foreach ($matches[1] as $name) {
+            $name = strtolower($name);
+            // Skip self, Reddit's meta-subs, and anything already collected.
+            if ($name === $self || in_array($name, ['all', 'popular', 'random'], true)) {
+                continue;
+            }
+            $related[$name] = true;
+        }
+
+        return array_keys($related);
     }
 
     /**

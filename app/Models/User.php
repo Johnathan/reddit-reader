@@ -29,6 +29,14 @@ class User extends Authenticatable implements HasPasskeys
     }
 
     /**
+     * @return HasMany<Feed, $this>
+     */
+    public function feeds(): HasMany
+    {
+        return $this->hasMany(Feed::class);
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -37,7 +45,6 @@ class User extends Authenticatable implements HasPasskeys
     {
         return [
             'email_verified_at' => 'datetime',
-            'reddit_refresh_token' => 'encrypted',
             'password' => 'hashed',
         ];
     }

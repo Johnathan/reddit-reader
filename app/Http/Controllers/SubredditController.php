@@ -43,6 +43,18 @@ class SubredditController extends Controller
             ->where('subreddit', $subreddit)
             ->exists();
 
+        // Related communities from the sidebar, minus anything already followed.
+        $related = [];
+        try {
+            $subscribed = array_flip($request->user()->subscriptions()->pluck('subreddit')->all());
+            $related = array_values(array_filter(
+                array_slice($this->reddit->relatedSubreddits($subreddit), 0, 12),
+                fn ($n) => ! isset($subscribed[$n])
+            ));
+        } catch (RedditException $e) {
+            // Related subs are a nicety; never let them break the page.
+        }
+
         return view('subreddit.show', [
             'subreddit' => $subreddit,
             'posts' => $posts,
@@ -50,6 +62,7 @@ class SubredditController extends Controller
             'after' => $after,
             'error' => $error,
             'isSubscribed' => $isSubscribed,
+            'related' => $related,
         ]);
     }
 }

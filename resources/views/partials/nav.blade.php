@@ -9,6 +9,8 @@
         </div>
 
         <div class="flex items-center gap-4 text-sm shrink-0">
+            <a href="{{ route('explore') }}" class="text-neutral-300 hover:text-white">explore</a>
+            <a href="{{ route('feeds.index') }}" class="text-neutral-300 hover:text-white">feeds</a>
             <a href="{{ route('subs.index') }}" class="text-neutral-300 hover:text-white">subs</a>
             <form method="POST" action="{{ Route::has('logout') ? route('logout') : '#' }}">
                 @csrf

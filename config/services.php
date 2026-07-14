@@ -18,12 +18,6 @@ return [
         'key' => env('POSTMARK_API_KEY'),
     ],
 
-    'reddit' => [
-        'client_id' => env('REDDIT_CLIENT_ID'),
-        'client_secret' => env('REDDIT_CLIENT_SECRET'),
-        'user_agent' => 'macos:personal-reddit-reader:v1.0 (personal single-user reader)',
-    ],
-
     'resend' => [
         'key' => env('RESEND_API_KEY'),
     ],

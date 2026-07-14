@@ -1,8 +1,9 @@
 <?php
 
+use App\Http\Controllers\ExploreController;
+use App\Http\Controllers\FeedController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\PostController;
-use App\Http\Controllers\RedditAccountController;
 use App\Http\Controllers\SubredditController;
 use App\Http\Controllers\SubscriptionController;
 use Illuminate\Support\Facades\Route;
@@ -10,10 +11,15 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
     Route::get('/', [HomeController::class, 'index'])->name('home');
 
-    // Linking a Reddit account is what makes 18+ subreddits visible.
-    Route::get('/reddit/connect', [RedditAccountController::class, 'connect'])->name('reddit.connect');
-    Route::get('/reddit/callback', [RedditAccountController::class, 'callback'])->name('reddit.callback');
-    Route::delete('/reddit/disconnect', [RedditAccountController::class, 'disconnect'])->name('reddit.disconnect');
+    Route::get('/explore', [ExploreController::class, 'index'])->name('explore');
+
+    // Custom feeds (local multireddits): named groups of subs, no account needed.
+    Route::get('/feeds', [FeedController::class, 'index'])->name('feeds.index');
+    Route::post('/feeds', [FeedController::class, 'store'])->name('feeds.store');
+    Route::get('/f/{slug}', [FeedController::class, 'show'])->name('feeds.show');
+    Route::delete('/feeds/{feed}', [FeedController::class, 'destroy'])->name('feeds.destroy');
+    Route::post('/feeds/{feed}/subs', [FeedController::class, 'addSubreddit'])->name('feeds.subs.store');
+    Route::delete('/feeds/{feed}/subs/{subreddit}', [FeedController::class, 'removeSubreddit'])->name('feeds.subs.destroy');
 
     Route::get('/subs', [SubscriptionController::class, 'index'])->name('subs.index');
     Route::post('/subs', [SubscriptionController::class, 'store'])->name('subs.store');

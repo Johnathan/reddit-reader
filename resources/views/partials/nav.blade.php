@@ -1,5 +1,7 @@
-<nav class="sticky top-0 z-40 bg-neutral-950/90 backdrop-blur border-b border-neutral-800">
-    <div class="max-w-2xl mx-auto px-3 h-12 flex items-center justify-between gap-3">
+<nav class="sticky top-0 z-40 bg-neutral-950/90 backdrop-blur border-b border-neutral-800"
+     style="padding-top: env(safe-area-inset-top);">
+    <div class="max-w-2xl mx-auto h-12 flex items-center justify-between gap-3"
+         style="padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right));">
         <div class="flex items-center gap-2 min-w-0">
             <a href="{{ route('home') }}" class="font-semibold text-orange-400 shrink-0">reader</a>
             @hasSection('subnav-title')

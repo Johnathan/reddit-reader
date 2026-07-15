@@ -21,8 +21,19 @@
         tailwind.config = { darkMode: 'class' };
     </script>
     <style>
-        html { color-scheme: dark; }
+        html { color-scheme: dark; -webkit-text-size-adjust: 100%; }
         body { -webkit-tap-highlight-color: transparent; }
+
+        /* iOS Safari zooms the page when you focus a form control whose
+           font-size is < 16px. Every input here is text-sm (14px), so pin
+           form controls to 16px. !important is needed to beat Tailwind's
+           .text-sm class. Applied on touch/small screens only, so the desktop
+           layout keeps its compact type. */
+        @media (max-width: 767px) {
+            input:not([type="checkbox"]):not([type="radio"]),
+            textarea,
+            select { font-size: 16px !important; }
+        }
         .reddit-html a { color: #fdba74; text-decoration: underline; text-underline-offset: 2px; }
         .reddit-html p { margin: 0.5em 0; }
         .reddit-html blockquote { border-left: 3px solid #52525b; padding-left: 0.75em; margin: 0.5em 0; color: #a1a1aa; }
@@ -40,7 +51,8 @@
 <body class="bg-neutral-950 text-neutral-100 min-h-screen antialiased">
     @include('partials.nav')
 
-    <main class="max-w-2xl mx-auto px-3 pb-24 pt-4">
+    <main class="max-w-2xl mx-auto pt-4"
+          style="padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); padding-bottom: calc(6rem + env(safe-area-inset-bottom));">
         @if (session('status'))
             <div class="mb-4 rounded-lg bg-emerald-900/40 border border-emerald-700 text-emerald-200 px-3 py-2 text-sm">
                 {{ session('status') }}

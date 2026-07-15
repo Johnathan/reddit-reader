@@ -19,8 +19,17 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@simplewebauthn/browser@13.1.0/dist/bundle/index.umd.min.js"></script>
+    <style>
+        html { -webkit-text-size-adjust: 100%; }
+        /* Prevent iOS focus-zoom (font-size must be >= 16px on form controls). */
+        @media (max-width: 767px) {
+            input:not([type="checkbox"]):not([type="radio"]),
+            textarea, select { font-size: 16px !important; }
+        }
+    </style>
 </head>
-<body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased">
+<body class="min-h-screen bg-zinc-950 text-zinc-100 antialiased"
+      style="padding: env(safe-area-inset-top) max(0px, env(safe-area-inset-right)) env(safe-area-inset-bottom) max(0px, env(safe-area-inset-left));">
 
     @yield('content')
 

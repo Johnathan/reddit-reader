@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\RedditException;
 use App\Models\Subscription;
 use App\Services\Reddit;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\View\View;
@@ -12,6 +13,21 @@ use Illuminate\View\View;
 class SubscriptionController extends Controller
 {
     public function __construct(protected Reddit $reddit) {}
+
+    /**
+     * Live typeahead for the search boxes. Returns [] rather than an error on a
+     * Reddit hiccup — a dead suggestion drop-down shouldn't surface a scary message.
+     */
+    public function suggest(Request $request): JsonResponse
+    {
+        try {
+            $suggestions = $this->reddit->suggestSubreddits((string) $request->query('q', ''));
+        } catch (RedditException $e) {
+            $suggestions = [];
+        }
+
+        return response()->json($suggestions);
+    }
 
     /**
      * Manage-subscriptions page: current subscriptions plus a subreddit

@@ -299,6 +299,54 @@ class Reddit
     }
 
     /**
+     * Typeahead suggestions for a partial subreddit name — the endpoint that
+     * powers Reddit's own search box. Returns a lean, view-ready shape.
+     *
+     * @return array<int, array{name: string, subscribers: int, icon: ?string, nsfw: bool}>
+     */
+    public function suggestSubreddits(string $query): array
+    {
+        $q = trim($query);
+
+        if (mb_strlen($q) < 2) {
+            return [];
+        }
+
+        $cacheKey = 'reddit:suggest:'.md5(mb_strtolower($q));
+
+        return Cache::remember($cacheKey, 300, function () use ($q) {
+            $data = $this->request('/api/subreddit_autocomplete_v2.json', [
+                'query' => $q,
+                'limit' => 10,
+                'include_over_18' => 'false',
+                'include_profiles' => 'false',
+                'raw_json' => 1,
+            ]);
+
+            $children = $data['data']['children'] ?? [];
+
+            return array_values(array_filter(array_map(function ($child) {
+                $d = $child['data'] ?? [];
+
+                // Autocomplete can return user profiles (t2) and empty rows; keep real subs.
+                if (($child['kind'] ?? null) !== 't5' || empty($d['display_name'])) {
+                    return null;
+                }
+
+                $icon = $d['community_icon'] ?: ($d['icon_img'] ?? '');
+                $icon = $icon ? strtok($icon, '?') : null; // Drop Reddit's cache-busting query string.
+
+                return [
+                    'name' => $d['display_name'],
+                    'subscribers' => (int) ($d['subscribers'] ?? 0),
+                    'icon' => $icon ?: null,
+                    'nsfw' => (bool) ($d['over_18'] ?? false),
+                ];
+            }, $children)));
+        });
+    }
+
+    /**
      * A subreddit's "about" record: subscriber count, description, icon, etc.
      */
     public function about(string $subreddit): ?array

@@ -25,7 +25,7 @@
             <summary class="list-none cursor-pointer bg-neutral-800 rounded-full px-3 py-1 text-xs text-orange-300 hover:bg-neutral-700 select-none">+ add sub</summary>
             <form method="POST" action="{{ route('feeds.subs.store', $feed) }}" class="absolute left-0 mt-1 z-20 flex gap-1 bg-neutral-900 border border-neutral-700 rounded-lg p-2 shadow-xl">
                 @csrf
-                <input type="text" name="subreddit" placeholder="subreddit" pattern="[A-Za-z0-9_]{2,21}"
+                <input type="text" name="subreddit" placeholder="subreddit" pattern="[A-Za-z0-9_]{2,21}" data-sub-autocomplete="fill"
                        class="bg-neutral-800 border border-neutral-700 rounded px-2 py-1 text-xs w-32 focus:outline-none focus:border-orange-500">
                 <button class="text-xs px-2 py-1 rounded bg-orange-500 text-white hover:bg-orange-400">Add</button>
             </form>

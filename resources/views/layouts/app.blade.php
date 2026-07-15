@@ -38,5 +38,91 @@
 
         @yield('content')
     </main>
+
+    <script>
+    // Live subreddit typeahead. Attach to any text input with
+    // data-sub-autocomplete="navigate" (go to the subreddit on pick) or
+    // "fill" (just drop the name into the field). No dependencies.
+    (function () {
+        const SUGGEST_URL = @json(route('subs.suggest'));
+        const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'m' : n >= 1e3 ? (n/1e3).toFixed(1)+'k' : ''+n;
+
+        document.querySelectorAll('input[data-sub-autocomplete]').forEach(function (input) {
+            const mode = input.getAttribute('data-sub-autocomplete') || 'fill';
+            input.setAttribute('autocomplete', 'off');
+            input.setAttribute('spellcheck', 'false');
+
+            const box = document.createElement('div');
+            box.className = 'absolute left-0 right-0 mt-1 z-30 rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl overflow-hidden hidden';
+            const wrap = document.createElement('div');
+            wrap.className = 'relative flex-1';
+            input.parentNode.insertBefore(wrap, input);
+            wrap.appendChild(input);
+            wrap.appendChild(box);
+            input.classList.add('w-full'); // Fill the wrapper; the form's flex-1 now lives on the wrapper.
+
+            let items = [], active = -1, seq = 0, timer = null;
+
+            function hide() { box.classList.add('hidden'); box.innerHTML = ''; items = []; active = -1; }
+
+            function choose(name) {
+                if (mode === 'navigate') {
+                    window.location.href = '/r/' + name.toLowerCase();
+                } else {
+                    input.value = name;
+                    hide();
+                    input.focus();
+                }
+            }
+
+            function render() {
+                box.innerHTML = '';
+                items.forEach(function (s, i) {
+                    const row = document.createElement('button');
+                    row.type = 'button';
+                    row.className = 'w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-neutral-800 ' + (i === active ? 'bg-neutral-800' : '');
+                    const icon = s.icon
+                        ? '<img src="' + s.icon + '" class="w-5 h-5 rounded-full shrink-0" alt="">'
+                        : '<span class="w-5 h-5 rounded-full bg-neutral-700 shrink-0"></span>';
+                    row.innerHTML = icon +
+                        '<span class="text-sm text-neutral-100 truncate">r/' + s.name + '</span>' +
+                        (s.subscribers ? '<span class="ml-auto text-xs text-neutral-500 shrink-0">' + fmt(s.subscribers) + '</span>' : '');
+                    row.addEventListener('mousedown', e => { e.preventDefault(); choose(s.name); });
+                    box.appendChild(row);
+                });
+                box.classList.toggle('hidden', items.length === 0);
+            }
+
+            async function query(q) {
+                const mine = ++seq;
+                try {
+                    const res = await fetch(SUGGEST_URL + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
+                    const data = await res.json();
+                    if (mine !== seq) return; // A newer keystroke already fired; drop this stale response.
+                    items = Array.isArray(data) ? data : [];
+                    active = -1;
+                    render();
+                } catch (e) { /* network hiccup: leave the box as-is */ }
+            }
+
+            input.addEventListener('input', function () {
+                const q = input.value.trim();
+                clearTimeout(timer);
+                if (q.length < 2) { hide(); return; }
+                timer = setTimeout(() => query(q), 150);
+            });
+
+            input.addEventListener('keydown', function (e) {
+                if (box.classList.contains('hidden')) return;
+                if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); render(); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); active = Math.max(active - 1, 0); render(); }
+                else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(items[active].name); }
+                else if (e.key === 'Escape') { hide(); }
+            });
+
+            input.addEventListener('blur', () => setTimeout(hide, 120));
+        });
+    })();
+    </script>
 </body>
 </html>

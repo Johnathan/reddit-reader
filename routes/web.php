@@ -21,6 +21,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/feeds/{feed}/subs', [FeedController::class, 'addSubreddit'])->name('feeds.subs.store');
     Route::delete('/feeds/{feed}/subs/{subreddit}', [FeedController::class, 'removeSubreddit'])->name('feeds.subs.destroy');
 
+    Route::get('/subreddits/suggest', [SubscriptionController::class, 'suggest'])->name('subs.suggest');
+
     Route::get('/subs', [SubscriptionController::class, 'index'])->name('subs.index');
     Route::post('/subs', [SubscriptionController::class, 'store'])->name('subs.store');
     Route::delete('/subs/{subreddit}', [SubscriptionController::class, 'destroy'])->name('subs.destroy');

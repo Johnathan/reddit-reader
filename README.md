@@ -35,8 +35,18 @@ php artisan serve
 - `/f/{slug}` — a custom feed's combined listing
 - `/r/{sub}` — subreddit listing with subscribe/unsubscribe, related-communities strip, add-to-feed
 - `/r/{sub}/comments/{id}` — post + threaded comments (collapse, depth-capped)
-- `/subs` — manage subscriptions + subreddit search
+- `/subs` — manage subscriptions + subreddit search (with live typeahead)
 - `/settings/passkeys` — enroll/remove passkeys
+
+## Subreddit autocomplete
+
+The search boxes and the feed "add sub" field have live typeahead backed by
+Reddit's own autocomplete endpoint (`subreddit_autocomplete_v2`), proxied
+server-side through `GET /subreddits/suggest` so the challenge cookie is applied
+and there's no CORS. Suggestions show the icon, name, and member count; results
+are cached 5 min and requests are debounced (150 ms) with stale-response
+guarding. There's deliberately no local "all subreddits" list — there are
+millions and any snapshot is stale instantly; the live endpoint covers them all.
 
 ## Custom feeds
 

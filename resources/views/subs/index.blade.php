@@ -16,7 +16,7 @@
     @endif
 
     <form method="GET" action="{{ route('subs.index') }}" class="mb-5 flex gap-2">
-        <input type="text" name="q" value="{{ $q }}" placeholder="Search subreddits&hellip;"
+        <input type="text" name="q" value="{{ $q }}" placeholder="Search subreddits&hellip;" data-sub-autocomplete="navigate"
                class="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm placeholder-neutral-500 focus:outline-none focus:border-orange-500">
         <button type="submit" class="px-4 py-2 rounded-lg bg-orange-500 text-white text-sm font-medium hover:bg-orange-400">
             Search

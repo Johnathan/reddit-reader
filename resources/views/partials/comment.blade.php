@@ -1,13 +1,23 @@
 @php
     $kind = $comment['kind'] ?? null;
     $data = $comment['data'] ?? [];
+
+    // Load a deeper subtree in-app (never on Reddit) by re-opening the post
+    // focused on a given comment id.
+    $focusUrl = fn ($commentId) => route('posts.show', array_merge($postArgs, ['comment' => $commentId]));
 @endphp
 
 @if ($kind === 'more')
-    @if (($data['count'] ?? 0) > 0)
+    @php
+        // Only a comment-parented "more" can be expanded in-app; skip top-level
+        // "more" (parented to the post) rather than link out to Reddit.
+        $parent = $data['parent_id'] ?? '';
+        $parentComment = str_starts_with($parent, 't1_') ? substr($parent, 3) : null;
+    @endphp
+    @if (($data['count'] ?? 0) > 0 && $parentComment)
         <div class="py-2 text-xs" style="margin-left: {{ min($depth, 8) * 12 }}px">
-            <a href="{{ $permalink }}" target="_blank" rel="noopener" class="text-orange-300 hover:underline">
-                load {{ $data['count'] }} more comment{{ $data['count'] === 1 ? '' : 's' }} on reddit &rarr;
+            <a href="{{ $focusUrl($parentComment) }}" class="text-orange-400 hover:underline">
+                load {{ $data['count'] }} more repl{{ $data['count'] === 1 ? 'y' : 'ies' }} &rarr;
             </a>
         </div>
     @endif
@@ -24,7 +34,7 @@
             <div class="text-xs text-neutral-500 flex items-center gap-1.5 flex-wrap mb-1">
                 <button type="button"
                         onclick="const w=this.closest('.comment-body-wrap'); const b=w.querySelector('.comment-collapsible'); b.classList.toggle('hidden'); this.textContent = b.classList.contains('hidden') ? '[+]' : '[-]';"
-                        class="text-neutral-600 hover:text-white w-4">[-]</button>
+                        class="text-neutral-600 hover:text-neutral-900 w-4">[-]</button>
                 <span class="{{ $distinguished === 'moderator' ? 'text-emerald-400 font-medium' : 'font-medium text-neutral-300' }}">
                     u/{{ $data['author'] ?? '[deleted]' }}
                 </span>
@@ -47,13 +57,13 @@
                     </div>
 
                     @if ($tooDeep && !empty($replies))
-                        <a href="{{ $permalink }}" target="_blank" rel="noopener" class="text-xs text-orange-300 hover:underline">
-                            continue this thread on reddit &rarr;
+                        <a href="{{ $focusUrl($data['id']) }}" class="text-xs text-orange-400 hover:underline">
+                            continue this thread &rarr;
                         </a>
                     @elseif (!empty($replies))
                         <div class="mt-1">
                             @foreach ($replies as $reply)
-                                @include('partials.comment', ['comment' => $reply, 'depth' => $depth + 1, 'permalink' => $permalink])
+                                @include('partials.comment', ['comment' => $reply, 'depth' => $depth + 1, 'postArgs' => $postArgs])
                             @endforeach
                         </div>
                     @endif

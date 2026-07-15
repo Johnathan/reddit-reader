@@ -1,12 +1,13 @@
 @php
     $p = $postData;
-    $isSelf = $p['is_self'] ?? false;
     $internalUrl = route('posts.show', [
         'subreddit' => $p['subreddit'],
         'id' => $p['id'],
         'slug' => \Illuminate\Support\Str::slug($p['title'] ?? ''),
     ]);
-    $outUrl = (!$isSelf && !empty($p['url'])) ? html_entity_decode($p['url']) : null;
+
+    // The card NEVER links out — every tap opens the in-app post page. Any link
+    // to Reddit or the original source lives on that page, behind a menu.
 
     $previewImage = null;
     if (!empty($p['preview']['images'][0])) {
@@ -31,11 +32,7 @@
     <div class="flex gap-3">
         @if ($previewImage)
             <div class="shrink-0 relative w-20 h-20 rounded-lg overflow-hidden bg-neutral-800">
-                @if ($isSelf)
-                    <a href="{{ $internalUrl }}" class="block w-full h-full">
-                @else
-                    <a href="{{ $outUrl }}" target="_blank" rel="noopener" class="block w-full h-full">
-                @endif
+                <a href="{{ $internalUrl }}" class="block w-full h-full">
                     <img src="{{ $previewImage }}" loading="lazy"
                          class="w-full h-full object-cover {{ $isNsfw ? 'blur-md nsfw-img' : '' }}"
                          @if ($isNsfw) onclick="event.preventDefault(); this.classList.toggle('blur-md')" @endif>
@@ -60,17 +57,11 @@
                 @endif
             </div>
 
-            @if ($isSelf)
-                <a href="{{ $internalUrl }}" class="font-medium leading-snug hover:text-orange-300">
-                    {{ $p['title'] }}
-                </a>
-            @else
-                <a href="{{ $outUrl }}" target="_blank" rel="noopener" class="font-medium leading-snug hover:text-orange-300">
-                    {{ $p['title'] }}
-                </a>
-                @if (!empty($p['domain']))
-                    <div class="text-xs text-neutral-500 mt-0.5">{{ $p['domain'] }}</div>
-                @endif
+            <a href="{{ $internalUrl }}" class="font-medium leading-snug hover:text-orange-300">
+                {{ $p['title'] }}
+            </a>
+            @if (!($p['is_self'] ?? false) && !empty($p['domain']) && !str_starts_with($p['domain'], 'self.'))
+                <div class="text-xs text-neutral-500 mt-0.5">{{ $p['domain'] }}</div>
             @endif
 
             <div class="flex items-center gap-3 mt-2 text-xs text-neutral-400">

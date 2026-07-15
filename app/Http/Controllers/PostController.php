@@ -21,8 +21,14 @@ class PostController extends Controller
         $post = null;
         $comments = [];
 
+        // Optional focus on a single comment subtree, used to drill into deep
+        // threads in-app instead of bouncing the user out to Reddit.
+        $focus = $request->string('comment')->toString();
+        $focus = preg_match('/^[A-Za-z0-9]+$/', $focus) ? $focus : null;
+
         try {
-            $data = $this->reddit->comments($subreddit, $id);
+            $params = $focus ? ['comment' => $focus, 'context' => 0] : [];
+            $data = $this->reddit->comments($subreddit, $id, $params);
 
             $post = $data[0]['data']['children'][0]['data'] ?? null;
             $comments = $data[1]['data']['children'] ?? [];
@@ -39,6 +45,7 @@ class PostController extends Controller
             'post' => $post,
             'comments' => $comments,
             'error' => $error,
+            'focusComment' => $focus,
         ]);
     }
 }

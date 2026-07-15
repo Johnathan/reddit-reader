@@ -7,7 +7,7 @@
  * content. Only the static app-shell assets (icons, manifest, offline page)
  * are precached; everything else goes straight to the network.
  */
-const VERSION = 'v2';
+const VERSION = 'v3';
 const SHELL_CACHE = 'reader-shell-' + VERSION;
 
 const SHELL_ASSETS = [

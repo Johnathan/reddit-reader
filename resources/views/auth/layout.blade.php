@@ -10,8 +10,8 @@
          styles the status bar and offers install with the right icon. --}}
     <link rel="manifest" href="/manifest.webmanifest">
     <meta name="theme-color" content="#0a0a0a">
-    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=2">
-    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=2">
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png?v=3">
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=3">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black">

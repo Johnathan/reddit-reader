@@ -3,18 +3,6 @@
 @section('subnav-title', 'manage subscriptions')
 
 @section('content')
-    @if (session('status'))
-        <div class="rounded-lg bg-green-900/30 border border-green-700 text-green-200 px-3 py-3 text-sm mb-4">
-            {{ session('status') }}
-        </div>
-    @endif
-
-    @if (session('error'))
-        <div class="rounded-lg bg-red-900/30 border border-red-700 text-red-200 px-3 py-3 text-sm mb-4">
-            {{ session('error') }}
-        </div>
-    @endif
-
     <form method="GET" action="{{ route('subs.index') }}" class="mb-5 flex gap-2">
         <input type="text" name="q" value="{{ $q }}" placeholder="Search subreddits&hellip;" data-sub-autocomplete="navigate"
                class="flex-1 bg-neutral-900 border border-neutral-700 rounded-lg px-3 py-2 text-sm placeholder-neutral-500 focus:outline-none focus:border-orange-500">

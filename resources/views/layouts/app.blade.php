@@ -73,14 +73,32 @@
 
     <main class="max-w-2xl mx-auto pt-4"
           style="padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); padding-bottom: calc(6rem + env(safe-area-inset-bottom));">
-        @if (session('status'))
-            <div class="mb-4 rounded-lg bg-emerald-900/40 border border-emerald-700 text-emerald-200 px-3 py-2 text-sm">
-                {{ session('status') }}
-            </div>
-        @endif
-
         @yield('content')
     </main>
+
+    {{-- Single, centralised flash toast. Fixed-position so it never reflows the
+         page, auto-dismisses, and is the ONLY place flash messages render. --}}
+    @if (session('status') || session('error'))
+        @php $flashIsError = (bool) session('error'); @endphp
+        <div id="flash-toast" role="status" aria-live="polite"
+             class="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-full text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg"
+             style="bottom: calc(1rem + env(safe-area-inset-bottom));">
+            <span class="w-2 h-2 rounded-full shrink-0 {{ $flashIsError ? 'bg-red-500' : 'bg-emerald-500' }}"></span>
+            <span class="truncate">{{ session('error') ?: session('status') }}</span>
+        </div>
+        <script>
+            (function () {
+                var t = document.getElementById('flash-toast');
+                if (!t) return;
+                t.style.transition = 'opacity .3s ease, transform .3s ease';
+                setTimeout(function () {
+                    t.style.opacity = '0';
+                    t.style.transform = 'translate(-50%, 10px)';
+                    setTimeout(function () { t.remove(); }, 320);
+                }, 2600);
+            })();
+        </script>
+    @endif
 
     <script>
     // Live subreddit typeahead. Attach to any text input with

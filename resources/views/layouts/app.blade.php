@@ -116,6 +116,16 @@
             }, 2600);
         };
 
+        // ---- collapse/expand a comment (its OWN subtree, not an ancestor's) --
+        window.toggleComment = function (btn) {
+            const c = btn.closest('[data-comment]');
+            if (!c) return;
+            const body = c.querySelector(':scope > .comment-body-wrap > .comment-collapsible');
+            if (!body) return;
+            const collapsed = body.classList.toggle('hidden');
+            btn.textContent = collapsed ? '[+]' : '[-]';
+        };
+
         function showFlash() {
             var b = document.body;
             if (b && b.dataset.flash) {

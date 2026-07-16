@@ -30,10 +30,9 @@
         $distinguished = $data['distinguished'] ?? null;
     @endphp
     <div class="border-l border-neutral-800" style="margin-left: {{ $indent }}px; padding-left: 10px;">
-        <div class="py-2">
+        <div data-comment class="py-2">
             <div class="text-xs text-neutral-500 flex items-center gap-1.5 flex-wrap mb-1">
-                <button type="button"
-                        onclick="const w=this.closest('.comment-body-wrap'); const b=w.querySelector('.comment-collapsible'); b.classList.toggle('hidden'); this.textContent = b.classList.contains('hidden') ? '[+]' : '[-]';"
+                <button type="button" onclick="toggleComment(this)"
                         class="text-neutral-600 hover:text-neutral-900 w-4">[-]</button>
                 <span class="{{ $distinguished === 'moderator' ? 'text-emerald-400 font-medium' : 'font-medium text-neutral-300' }}">
                     u/{{ $data['author'] ?? '[deleted]' }}

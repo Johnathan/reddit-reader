@@ -48,18 +48,6 @@
             </details>
         @endif
 
-        @if ($subscribed)
-            <form method="POST" action="{{ route('subs.destroy', strtolower($name)) }}">
-                @csrf
-                @method('DELETE')
-                <button class="text-xs px-3 py-1.5 rounded-full bg-neutral-800 text-neutral-300 whitespace-nowrap hover:bg-red-900 hover:text-red-200">Subscribed</button>
-            </form>
-        @else
-            <form method="POST" action="{{ route('subs.store') }}">
-                @csrf
-                <input type="hidden" name="subreddit" value="{{ $name }}">
-                <button class="text-xs px-3 py-1.5 rounded-full bg-orange-500 text-white whitespace-nowrap hover:bg-orange-400">Subscribe</button>
-            </form>
-        @endif
+        @include('partials.subscribe-button', ['subreddit' => $name, 'subscribed' => $subscribed, 'subscribedLabel' => 'Subscribed'])
     </div>
 </div>

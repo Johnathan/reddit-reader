@@ -5,23 +5,7 @@
 @section('content')
     <div class="flex items-center justify-between mb-3 gap-2">
         <h1 class="text-lg font-semibold truncate">r/{{ $subreddit }}</h1>
-        @if ($isSubscribed)
-            <form method="POST" action="{{ route('subs.destroy', $subreddit) }}">
-                @csrf
-                @method('DELETE')
-                <button class="text-xs px-3 py-1.5 rounded-full bg-neutral-800 text-neutral-300 hover:bg-red-900 hover:text-red-200 whitespace-nowrap">
-                    Unsubscribe
-                </button>
-            </form>
-        @else
-            <form method="POST" action="{{ route('subs.store') }}">
-                @csrf
-                <input type="hidden" name="subreddit" value="{{ $subreddit }}">
-                <button class="text-xs px-3 py-1.5 rounded-full bg-orange-500 text-white hover:bg-orange-400 whitespace-nowrap">
-                    Subscribe
-                </button>
-            </form>
-        @endif
+        @include('partials.subscribe-button', ['subreddit' => $subreddit, 'subscribed' => $isSubscribed, 'subscribedLabel' => 'Unsubscribe'])
     </div>
 
     @if (! empty($related))

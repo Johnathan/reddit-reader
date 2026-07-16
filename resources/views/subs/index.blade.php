@@ -39,13 +39,7 @@
     @forelse ($subscriptions as $s)
         <div class="flex items-center justify-between gap-3 bg-neutral-900 rounded-lg px-3 py-2 mb-2">
             <a href="{{ route('subreddit.show', $s->subreddit) }}" class="font-medium hover:text-orange-300">r/{{ $s->subreddit }}</a>
-            <form method="POST" action="{{ route('subs.destroy', $s->subreddit) }}">
-                @csrf
-                @method('DELETE')
-                <button class="text-xs px-3 py-1.5 rounded-full bg-neutral-800 text-neutral-300 hover:bg-red-900 hover:text-red-200">
-                    Unsubscribe
-                </button>
-            </form>
+            @include('partials.subscribe-button', ['subreddit' => $s->subreddit, 'subscribed' => true, 'subscribedLabel' => 'Unsubscribe'])
         </div>
     @empty
         <p class="text-neutral-500 text-sm">No subscriptions yet &mdash; search above to find subreddits.</p>

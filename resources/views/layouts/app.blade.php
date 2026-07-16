@@ -3,6 +3,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>@yield('title', 'reader')</title>
 
     {{-- Installable PWA: manifest, icons, and iOS home-screen meta --}}
@@ -76,28 +77,31 @@
         @yield('content')
     </main>
 
-    {{-- Single, centralised flash toast. Fixed-position so it never reflows the
-         page, auto-dismisses, and is the ONLY place flash messages render. --}}
+    <script>
+    // A single floating toast helper: fixed-position (never reflows the page),
+    // auto-dismissing. Used by both server flash messages and AJAX actions.
+    window.showToast = function (message, isError) {
+        var t = document.createElement('div');
+        t.setAttribute('role', 'status');
+        t.className = 'fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-full text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg';
+        t.style.bottom = 'calc(1rem + env(safe-area-inset-bottom))';
+        t.style.transition = 'opacity .3s ease, transform .3s ease';
+        var dot = document.createElement('span');
+        dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (isError ? 'bg-red-500' : 'bg-emerald-500');
+        var txt = document.createElement('span');
+        txt.className = 'truncate';
+        txt.textContent = message;
+        t.appendChild(dot); t.appendChild(txt);
+        document.body.appendChild(t);
+        setTimeout(function () {
+            t.style.opacity = '0';
+            t.style.transform = 'translate(-50%, 10px)';
+            setTimeout(function () { t.remove(); }, 320);
+        }, 2600);
+    };
+    </script>
     @if (session('status') || session('error'))
-        @php $flashIsError = (bool) session('error'); @endphp
-        <div id="flash-toast" role="status" aria-live="polite"
-             class="fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-full text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg"
-             style="bottom: calc(1rem + env(safe-area-inset-bottom));">
-            <span class="w-2 h-2 rounded-full shrink-0 {{ $flashIsError ? 'bg-red-500' : 'bg-emerald-500' }}"></span>
-            <span class="truncate">{{ session('error') ?: session('status') }}</span>
-        </div>
-        <script>
-            (function () {
-                var t = document.getElementById('flash-toast');
-                if (!t) return;
-                t.style.transition = 'opacity .3s ease, transform .3s ease';
-                setTimeout(function () {
-                    t.style.opacity = '0';
-                    t.style.transform = 'translate(-50%, 10px)';
-                    setTimeout(function () { t.remove(); }, 320);
-                }, 2600);
-            })();
-        </script>
+        <script>showToast(@json(session('error') ?: session('status')), @json((bool) session('error')));</script>
     @endif
 
     <script>
@@ -184,6 +188,52 @@
             input.addEventListener('blur', () => setTimeout(hide, 120));
         });
     })();
+    </script>
+
+    <script>
+    // Subscribe / unsubscribe in place via fetch — no page reload, no scroll
+    // jump. Every toggle button for the same subreddit updates together.
+    document.addEventListener('click', async function (e) {
+        const btn = e.target.closest('[data-sub-toggle]');
+        if (!btn || btn.disabled) return;
+        e.preventDefault();
+
+        const sub = btn.dataset.subreddit;
+        const wasSubscribed = btn.dataset.subscribed === '1';
+        const csrf = document.querySelector('meta[name="csrf-token"]').content;
+        const peers = document.querySelectorAll('[data-sub-toggle][data-subreddit="' + CSS.escape(sub) + '"]');
+        peers.forEach(b => b.disabled = true);
+
+        try {
+            let res;
+            if (wasSubscribed) {
+                res = await fetch('/subs/' + encodeURIComponent(sub), {
+                    method: 'DELETE',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
+                });
+            } else {
+                res = await fetch('/subs', {
+                    method: 'POST',
+                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: new URLSearchParams({ subreddit: sub }),
+                });
+            }
+            if (!res.ok) throw new Error('request failed');
+            const data = await res.json();
+            const now = !!data.subscribed;
+
+            peers.forEach(function (b) {
+                b.dataset.subscribed = now ? '1' : '0';
+                b.textContent = now ? b.dataset.labelUnsub : b.dataset.labelSub;
+                b.className = b.dataset.classBase + ' ' + (now ? b.dataset.classUnsub : b.dataset.classSub);
+            });
+            showToast(data.message || (now ? 'Subscribed' : 'Unsubscribed'));
+        } catch (err) {
+            showToast('Something went wrong. Please try again.', true);
+        } finally {
+            peers.forEach(b => b.disabled = false);
+        }
+    });
     </script>
 
     <script>

@@ -6,8 +6,8 @@ use App\Exceptions\RedditException;
 use App\Models\Subscription;
 use App\Services\Reddit;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class SubscriptionController extends Controller
@@ -62,32 +62,49 @@ class SubscriptionController extends Controller
     }
 
     /**
-     * Subscribe to a subreddit.
+     * Subscribe to a subreddit. Returns JSON to fetch() callers (so the button
+     * toggles in place without a page reload) and a redirect otherwise.
      */
-    public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse|JsonResponse
     {
         $validated = $request->validate([
             'subreddit' => ['required', 'string', 'regex:/^[A-Za-z0-9_]{2,21}$/'],
         ]);
 
+        $name = strtolower($validated['subreddit']);
+
         Subscription::firstOrCreate([
             'user_id' => $request->user()->id,
-            'subreddit' => strtolower($validated['subreddit']),
+            'subreddit' => $name,
         ]);
 
-        return back()->with('status', "Subscribed to r/{$validated['subreddit']}.");
+        $message = "Subscribed to r/{$validated['subreddit']}.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['subscribed' => true, 'subreddit' => $name, 'message' => $message]);
+        }
+
+        return back()->with('status', $message);
     }
 
     /**
      * Unsubscribe from a subreddit.
      */
-    public function destroy(Request $request, string $subreddit): RedirectResponse
+    public function destroy(Request $request, string $subreddit): RedirectResponse|JsonResponse
     {
+        $name = strtolower($subreddit);
+
         Subscription::query()
             ->where('user_id', $request->user()->id)
-            ->where('subreddit', strtolower($subreddit))
+            ->where('subreddit', $name)
             ->delete();
 
-        return back()->with('status', "Unsubscribed from r/{$subreddit}.");
+        $message = "Unsubscribed from r/{$subreddit}.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['subscribed' => false, 'subreddit' => $name, 'message' => $message]);
+        }
+
+        return back()->with('status', $message);
     }
 }

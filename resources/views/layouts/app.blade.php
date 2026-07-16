@@ -116,6 +116,56 @@
             }, 2600);
         };
 
+        // ---- custom confirm dialog (replaces the ugly native confirm()) -----
+        window.confirmDialog = function (message, opts) {
+            opts = opts || {};
+            return new Promise(function (resolve) {
+                const overlay = document.createElement('div');
+                overlay.dataset.modal = '1';
+                overlay.className = 'fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150';
+                const card = document.createElement('div');
+                card.setAttribute('role', 'dialog');
+                card.setAttribute('aria-modal', 'true');
+                card.className = 'w-full sm:max-w-sm m-3 rounded-2xl bg-neutral-900 border border-neutral-700 shadow-2xl p-4 translate-y-3 sm:translate-y-0 transition-transform duration-150';
+                card.style.marginBottom = 'calc(0.75rem + env(safe-area-inset-bottom))';
+
+                const msg = document.createElement('p');
+                msg.className = 'text-neutral-100 text-sm mb-4';
+                msg.textContent = message;
+
+                const rowEl = document.createElement('div');
+                rowEl.className = 'flex gap-2 justify-end';
+                const cancel = document.createElement('button');
+                cancel.type = 'button';
+                cancel.className = 'px-4 py-2 rounded-full text-sm font-medium bg-neutral-800 text-neutral-300 hover:bg-neutral-700';
+                cancel.textContent = opts.cancelLabel || 'Cancel';
+                const ok = document.createElement('button');
+                ok.type = 'button';
+                ok.className = 'px-4 py-2 rounded-full text-sm font-medium text-white ' + (opts.danger ? 'bg-red-600 hover:bg-red-500' : 'bg-orange-500 hover:bg-orange-400');
+                ok.textContent = opts.okLabel || 'Confirm';
+
+                rowEl.appendChild(cancel); rowEl.appendChild(ok);
+                card.appendChild(msg); card.appendChild(rowEl);
+                overlay.appendChild(card);
+                document.body.appendChild(overlay);
+                requestAnimationFrame(function () { overlay.classList.remove('opacity-0'); card.classList.remove('translate-y-3'); });
+
+                function done(val) {
+                    document.removeEventListener('keydown', onKey);
+                    overlay.classList.add('opacity-0');
+                    card.classList.add('translate-y-3');
+                    setTimeout(function () { overlay.remove(); }, 150);
+                    resolve(val);
+                }
+                function onKey(e) { if (e.key === 'Escape') done(false); else if (e.key === 'Enter') done(true); }
+                cancel.addEventListener('click', function () { done(false); });
+                ok.addEventListener('click', function () { done(true); });
+                overlay.addEventListener('click', function (e) { if (e.target === overlay) done(false); });
+                document.addEventListener('keydown', onKey);
+                ok.focus();
+            });
+        };
+
         // ---- collapse/expand a comment (its OWN subtree, not an ancestor's) --
         window.toggleComment = function (btn) {
             const c = btn.closest('[data-comment]');
@@ -176,7 +226,10 @@
             const form = e.target.closest('form[data-ajax]');
             if (!form) return;
             e.preventDefault();
-            if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
+            if (form.dataset.confirm) {
+                const ok = await confirmDialog(form.dataset.confirm, { danger: true, okLabel: form.dataset.confirmOk || 'Delete' });
+                if (!ok) return;
+            }
             const btn = form.querySelector('button');
             if (btn) btn.disabled = true;
             try {
@@ -188,7 +241,7 @@
                 if (!res.ok) throw new Error('failed');
                 const data = await res.json().catch(() => ({}));
 
-                if (form.dataset.ajaxRemove) {
+                if (form.hasAttribute('data-ajax-remove')) {
                     const el = form.closest('[data-removable]');
                     if (el) { el.style.transition = 'opacity .2s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
                 }
@@ -331,7 +384,7 @@
         // Strip body-appended helpers (dropdowns, toasts) before Turbo caches a
         // snapshot, so restored pages are pristine and get re-initialised clean.
         document.addEventListener('turbo:before-cache', function () {
-            document.querySelectorAll('[data-ac-box],[data-toast]').forEach(el => el.remove());
+            document.querySelectorAll('[data-ac-box],[data-toast],[data-modal]').forEach(el => el.remove());
         });
 
         document.addEventListener('turbo:load', initPage);

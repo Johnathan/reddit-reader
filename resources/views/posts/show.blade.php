@@ -52,7 +52,7 @@
         <article class="pb-4 border-b border-neutral-800">
             <div class="flex items-start justify-between gap-2">
                 <div class="text-xs text-neutral-500 mb-1 flex items-center gap-1.5 flex-wrap">
-                    <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 font-medium hover:text-white">r/{{ $p['subreddit'] }}</a>
+                    <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 font-medium hover:text-neutral-900">r/{{ $p['subreddit'] }}</a>
                     <span>&middot;</span>
                     <span>u/{{ $p['author'] ?? '[deleted]' }}</span>
                     <span>&middot;</span>

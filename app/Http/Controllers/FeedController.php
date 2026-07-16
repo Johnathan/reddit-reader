@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Exceptions\RedditException;
 use App\Models\Feed;
 use App\Services\Reddit;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
@@ -35,7 +36,8 @@ class FeedController extends Controller
             'slug' => Feed::uniqueSlugFor($request->user()->id, $validated['name']),
         ]);
 
-        return redirect()->route('feeds.show', $feed->slug)
+        // 303 so Turbo follows the redirect as a GET visit to the new feed.
+        return redirect()->route('feeds.show', $feed->slug, 303)
             ->with('status', "Created feed “{$feed->name}”. Add some subreddits to it.");
     }
 
@@ -77,17 +79,23 @@ class FeedController extends Controller
         ]);
     }
 
-    public function destroy(Request $request, Feed $feed): RedirectResponse
+    public function destroy(Request $request, Feed $feed): RedirectResponse|JsonResponse
     {
         $this->authorizeFeed($request, $feed);
 
         $name = $feed->name;
         $feed->delete();
 
-        return redirect()->route('feeds.index')->with('status', "Deleted feed “{$name}”.");
+        $message = "Deleted feed “{$name}”.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return redirect()->route('feeds.index')->with('status', $message);
     }
 
-    public function addSubreddit(Request $request, Feed $feed): RedirectResponse
+    public function addSubreddit(Request $request, Feed $feed): RedirectResponse|JsonResponse
     {
         $this->authorizeFeed($request, $feed);
 
@@ -95,18 +103,33 @@ class FeedController extends Controller
             'subreddit' => ['required', 'string', 'regex:/^[A-Za-z0-9_]{2,21}$/'],
         ]);
 
-        $feed->subreddits()->firstOrCreate(['subreddit' => strtolower($validated['subreddit'])]);
+        $item = $feed->subreddits()->firstOrCreate(['subreddit' => strtolower($validated['subreddit'])]);
 
-        return back()->with('status', "Added r/{$validated['subreddit']} to “{$feed->name}”.");
+        $message = "Added r/{$validated['subreddit']} to “{$feed->name}”.";
+
+        if ($request->expectsJson()) {
+            return response()->json([
+                'message' => $message,
+                'html' => view('feeds.partials.chip', ['feed' => $feed, 'fs' => $item])->render(),
+            ]);
+        }
+
+        return back()->with('status', $message);
     }
 
-    public function removeSubreddit(Request $request, Feed $feed, string $subreddit): RedirectResponse
+    public function removeSubreddit(Request $request, Feed $feed, string $subreddit): RedirectResponse|JsonResponse
     {
         $this->authorizeFeed($request, $feed);
 
         $feed->subreddits()->where('subreddit', strtolower($subreddit))->delete();
 
-        return back()->with('status', "Removed r/{$subreddit} from “{$feed->name}”.");
+        $message = "Removed r/{$subreddit} from “{$feed->name}”.";
+
+        if ($request->expectsJson()) {
+            return response()->json(['message' => $message]);
+        }
+
+        return back()->with('status', $message);
     }
 
     /**

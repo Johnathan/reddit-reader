@@ -4,6 +4,9 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    {{-- Turbo turns every link + form into an in-place fetch — no full page
+         reloads — and the view-transition tag animates the swaps natively. --}}
+    <meta name="view-transition" content="same-origin">
     <title>@yield('title', 'reader')</title>
 
     {{-- Installable PWA: manifest, icons, and iOS home-screen meta --}}
@@ -19,12 +22,8 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-        // Warm "paper" theme. The UI was authored dark-first with neutral/orange
-        // utility classes, so instead of editing every view we remap those
-        // palettes to a light cream/navy/amber scheme: the neutral ramp is
-        // inverted (950 = cream page, 100 = navy ink), orange becomes amber,
-        // and the semantic scales are inverted so *-900 backgrounds read as
-        // light tints with dark *-200 text.
+        // Warm "paper" theme — remap Tailwind's neutral/orange palettes so the
+        // dark-authored utility classes render as a light cream/navy/amber scheme.
         const paper = {
             100: '#1e2740', 200: '#293251', 300: '#46506b', 400: '#6a6250',
             500: '#7c705a', 600: '#9a8c70', 700: '#cbbb98', 800: '#e5dcc7',
@@ -41,20 +40,26 @@
             } } },
         };
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.23/dist/turbo.es2017-umd.min.js"></script>
     <style>
         html { color-scheme: light; -webkit-text-size-adjust: 100%; }
-        body { -webkit-tap-highlight-color: transparent; }
+        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
 
-        /* iOS Safari zooms the page when you focus a form control whose
-           font-size is < 16px. Every input here is text-sm (14px), so pin
-           form controls to 16px. !important is needed to beat Tailwind's
-           .text-sm class. Applied on touch/small screens only, so the desktop
-           layout keeps its compact type. */
+        /* iOS Safari zooms the page when focusing a form control with
+           font-size < 16px; pin form controls to 16px on small screens. */
         @media (max-width: 767px) {
             input:not([type="checkbox"]):not([type="radio"]),
             textarea,
             select { font-size: 16px !important; }
         }
+
+        /* Native-feeling page transitions + Turbo's loading bar. */
+        .turbo-progress-bar { height: 3px; background: #93611c; }
+        @media (prefers-reduced-motion: no-preference) {
+            ::view-transition-old(root),
+            ::view-transition-new(root) { animation-duration: 0.2s; }
+        }
+
         .reddit-html a { color: #93611c; text-decoration: underline; text-underline-offset: 2px; }
         .reddit-html p { margin: 0.5em 0; }
         .reddit-html blockquote { border-left: 3px solid #cbbb98; padding-left: 0.75em; margin: 0.5em 0; color: #6a6250; }
@@ -69,7 +74,8 @@
         .nsfw-img { transition: filter 0.15s ease; cursor: pointer; }
     </style>
 </head>
-<body class="bg-neutral-950 text-neutral-100 min-h-screen antialiased">
+<body class="bg-neutral-950 text-neutral-100 min-h-screen antialiased"
+      @if (session('status') || session('error')) data-flash="{{ session('error') ?: session('status') }}" data-flash-error="{{ session('error') ? '1' : '0' }}" @endif>
     @include('partials.nav')
 
     <main class="max-w-2xl mx-auto pt-4"
@@ -78,105 +84,223 @@
     </main>
 
     <script>
-    // A single floating toast helper: fixed-position (never reflows the page),
-    // auto-dismissing. Used by both server flash messages and AJAX actions.
-    window.showToast = function (message, isError) {
-        var t = document.createElement('div');
-        t.setAttribute('role', 'status');
-        t.className = 'fixed left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-full text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg';
-        t.style.bottom = 'calc(1rem + env(safe-area-inset-bottom))';
-        t.style.transition = 'opacity .3s ease, transform .3s ease';
-        var dot = document.createElement('span');
-        dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (isError ? 'bg-red-500' : 'bg-emerald-500');
-        var txt = document.createElement('span');
-        txt.className = 'truncate';
-        txt.textContent = message;
-        t.appendChild(dot); t.appendChild(txt);
-        document.body.appendChild(t);
-        setTimeout(function () {
-            t.style.opacity = '0';
-            t.style.transform = 'translate(-50%, 10px)';
-            setTimeout(function () { t.remove(); }, 320);
-        }, 2600);
-    };
-    </script>
-    @if (session('status') || session('error'))
-        <script>showToast(@json(session('error') ?: session('status')), @json((bool) session('error')));</script>
-    @endif
-
-    <script>
-    // Live subreddit typeahead. Attach to any text input with
-    // data-sub-autocomplete="navigate" (go to the subreddit on pick) or
-    // "fill" (just drop the name into the field). No dependencies.
+    // One boot for the app's whole lifetime. Turbo re-runs body scripts on each
+    // visit, so guard registration; per-page work runs on every turbo:load.
     (function () {
-        const SUGGEST_URL = @json(route('subs.suggest'));
-        const fmt = n => n >= 1e6 ? (n/1e6).toFixed(1)+'m' : n >= 1e3 ? (n/1e3).toFixed(1)+'k' : ''+n;
+        if (window.__readerBooted) return;
+        window.__readerBooted = true;
 
-        document.querySelectorAll('input[data-sub-autocomplete]').forEach(function (input) {
+        const SUGGEST_URL = @json(route('subs.suggest'));
+        const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'm' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : '' + n;
+        const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
+
+        // ---- floating toast (fixed position, never reflows) -----------------
+        window.showToast = function (message, isError) {
+            var t = document.createElement('div');
+            t.setAttribute('role', 'status');
+            t.dataset.toast = '1';
+            t.className = 'fixed left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-full text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg';
+            t.style.bottom = 'calc(1rem + env(safe-area-inset-bottom))';
+            t.style.transition = 'opacity .3s ease, transform .3s ease';
+            var dot = document.createElement('span');
+            dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (isError ? 'bg-red-500' : 'bg-emerald-500');
+            var txt = document.createElement('span');
+            txt.className = 'truncate';
+            txt.textContent = message;
+            t.appendChild(dot); t.appendChild(txt);
+            document.body.appendChild(t);
+            setTimeout(function () {
+                t.style.opacity = '0';
+                t.style.transform = 'translate(-50%, 10px)';
+                setTimeout(function () { t.remove(); }, 320);
+            }, 2600);
+        };
+
+        function showFlash() {
+            var b = document.body;
+            if (b && b.dataset.flash) {
+                showToast(b.dataset.flash, b.dataset.flashError === '1');
+                delete b.dataset.flash;
+                delete b.dataset.flashError;
+            }
+        }
+
+        // ---- subscribe / unsubscribe in place (delegated, bound once) -------
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('[data-sub-toggle]');
+            if (!btn || btn.disabled) return;
+            e.preventDefault();
+            const sub = btn.dataset.subreddit;
+            const wasSubscribed = btn.dataset.subscribed === '1';
+            const peers = document.querySelectorAll('[data-sub-toggle][data-subreddit="' + CSS.escape(sub) + '"]');
+            peers.forEach(b => b.disabled = true);
+            try {
+                let res;
+                if (wasSubscribed) {
+                    res = await fetch('/subs/' + encodeURIComponent(sub), { method: 'DELETE', headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' } });
+                } else {
+                    res = await fetch('/subs', { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ subreddit: sub }) });
+                }
+                if (!res.ok) throw new Error('failed');
+                const data = await res.json();
+                const now = !!data.subscribed;
+                peers.forEach(function (b) {
+                    b.dataset.subscribed = now ? '1' : '0';
+                    b.textContent = now ? b.dataset.labelUnsub : b.dataset.labelSub;
+                    b.className = b.dataset.classBase + ' ' + (now ? b.dataset.classUnsub : b.dataset.classSub);
+                });
+                showToast(data.message || (now ? 'Subscribed' : 'Unsubscribed'));
+            } catch (err) {
+                showToast('Something went wrong. Please try again.', true);
+            } finally {
+                peers.forEach(b => b.disabled = false);
+            }
+        });
+
+        // ---- generic in-place form (add-to-feed, feed create/add/remove) ----
+        // Any <form data-ajax data-turbo="false"> submits via fetch and never
+        // navigates. Optional behaviours via attributes:
+        //   data-ajax-remove          remove the closest [data-removable] on success
+        //   data-ajax-append="<sel>"  insert the response html before <sel>
+        document.addEventListener('submit', async function (e) {
+            const form = e.target.closest('form[data-ajax]');
+            if (!form) return;
+            e.preventDefault();
+            if (form.dataset.confirm && !window.confirm(form.dataset.confirm)) return;
+            const btn = form.querySelector('button');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch(form.action, {
+                    method: 'POST', // Laravel reads _method for DELETE/PUT from the body.
+                    headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' },
+                    body: new FormData(form),
+                });
+                if (!res.ok) throw new Error('failed');
+                const data = await res.json().catch(() => ({}));
+
+                if (form.dataset.ajaxRemove) {
+                    const el = form.closest('[data-removable]');
+                    if (el) { el.style.transition = 'opacity .2s'; el.style.opacity = '0'; setTimeout(() => el.remove(), 200); }
+                }
+                if (form.dataset.ajaxAppend && data.html) {
+                    const anchor = document.querySelector(form.dataset.ajaxAppend);
+                    if (anchor) {
+                        const tmp = document.createElement('div');
+                        tmp.innerHTML = data.html.trim();
+                        const node = tmp.firstElementChild;
+                        if (node) anchor.parentNode.insertBefore(node, anchor);
+                    }
+                }
+                form.reset();
+                const menu = form.closest('details[open]');
+                if (menu) menu.open = false;
+                if (data.message) showToast(data.message);
+            } catch (err) {
+                showToast('Something went wrong. Please try again.', true);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
+        });
+
+        // ---- append-based "load more" + infinite scroll --------------------
+        let lmObserver = null;
+        async function loadMore(trigger) {
+            if (!trigger || trigger.__loading) return;
+            const url = trigger.getAttribute('href') || trigger.dataset.url;
+            if (!url) return;
+            trigger.__loading = true;
+            const label = trigger.textContent;
+            trigger.textContent = 'Loading…';
+            try {
+                const res = await fetch(url, { headers: { 'Accept': 'text/html' } });
+                if (!res.ok) throw new Error('failed');
+                const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+                const incoming = doc.getElementById('post-list');
+                const list = document.getElementById('post-list');
+                if (incoming && list) { while (incoming.firstElementChild) list.appendChild(incoming.firstElementChild); }
+                const newLM = doc.getElementById('load-more');
+                const curLM = document.getElementById('load-more');
+                if (curLM) {
+                    if (newLM) { curLM.replaceWith(newLM); observeLoadMore(); }
+                    else { curLM.remove(); }
+                }
+            } catch (e) {
+                trigger.textContent = label;
+                trigger.__loading = false;
+                showToast('Could not load more.', true);
+            }
+        }
+        function observeLoadMore() {
+            const lm = document.getElementById('load-more');
+            if (!lm) return;
+            if (!lmObserver) {
+                lmObserver = new IntersectionObserver(function (entries) {
+                    entries.forEach(function (en) {
+                        if (en.isIntersecting) {
+                            const a = en.target.querySelector('[data-load-more]');
+                            if (a) loadMore(a);
+                        }
+                    });
+                }, { rootMargin: '600px' });
+            }
+            lmObserver.observe(lm);
+        }
+        document.addEventListener('click', function (e) {
+            const t = e.target.closest('[data-load-more]');
+            if (t) { e.preventDefault(); loadMore(t); }
+        });
+
+        // ---- subreddit typeahead (dropdown appended to <body>) --------------
+        function initAutocomplete(input) {
+            if (input.__ac) return;
+            input.__ac = true;
             const mode = input.getAttribute('data-sub-autocomplete') || 'fill';
             input.setAttribute('autocomplete', 'off');
             input.setAttribute('spellcheck', 'false');
 
             const box = document.createElement('div');
-            box.className = 'absolute left-0 right-0 mt-1 z-30 rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl overflow-hidden hidden';
-            const wrap = document.createElement('div');
-            wrap.className = 'relative flex-1';
-            input.parentNode.insertBefore(wrap, input);
-            wrap.appendChild(input);
-            wrap.appendChild(box);
-            input.classList.add('w-full'); // Fill the wrapper; the form's flex-1 now lives on the wrapper.
+            box.dataset.acBox = '1';
+            box.className = 'fixed z-50 rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl overflow-hidden hidden';
+            document.body.appendChild(box);
 
             let items = [], active = -1, seq = 0, timer = null;
-
+            function place() { const r = input.getBoundingClientRect(); box.style.left = r.left + 'px'; box.style.top = (r.bottom + 4) + 'px'; box.style.width = r.width + 'px'; }
             function hide() { box.classList.add('hidden'); box.innerHTML = ''; items = []; active = -1; }
-
             function choose(name) {
-                if (mode === 'navigate') {
-                    window.location.href = '/r/' + name.toLowerCase();
-                } else {
-                    input.value = name;
-                    hide();
-                    input.focus();
-                }
+                if (mode === 'navigate') { const url = '/r/' + name.toLowerCase(); window.Turbo ? Turbo.visit(url) : location.assign(url); }
+                else { input.value = name; hide(); input.focus(); }
             }
-
             function render() {
+                place();
                 box.innerHTML = '';
                 items.forEach(function (s, i) {
                     const row = document.createElement('button');
                     row.type = 'button';
                     row.className = 'w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-neutral-800 ' + (i === active ? 'bg-neutral-800' : '');
-                    const icon = s.icon
-                        ? '<img src="' + s.icon + '" class="w-5 h-5 rounded-full shrink-0" alt="">'
-                        : '<span class="w-5 h-5 rounded-full bg-neutral-700 shrink-0"></span>';
-                    row.innerHTML = icon +
-                        '<span class="text-sm text-neutral-100 truncate">r/' + s.name + '</span>' +
-                        (s.subscribers ? '<span class="ml-auto text-xs text-neutral-500 shrink-0">' + fmt(s.subscribers) + '</span>' : '');
-                    row.addEventListener('mousedown', e => { e.preventDefault(); choose(s.name); });
+                    const icon = s.icon ? '<img src="' + s.icon + '" class="w-5 h-5 rounded-full shrink-0" alt="">' : '<span class="w-5 h-5 rounded-full bg-neutral-700 shrink-0"></span>';
+                    row.innerHTML = icon + '<span class="text-sm text-neutral-100 truncate">r/' + s.name + '</span>' + (s.subscribers ? '<span class="ml-auto text-xs text-neutral-500 shrink-0">' + fmt(s.subscribers) + '</span>' : '');
+                    row.addEventListener('mousedown', ev => { ev.preventDefault(); choose(s.name); });
                     box.appendChild(row);
                 });
                 box.classList.toggle('hidden', items.length === 0);
             }
-
             async function query(q) {
                 const mine = ++seq;
                 try {
                     const res = await fetch(SUGGEST_URL + '?q=' + encodeURIComponent(q), { headers: { 'Accept': 'application/json' } });
                     const data = await res.json();
-                    if (mine !== seq) return; // A newer keystroke already fired; drop this stale response.
+                    if (mine !== seq) return;
                     items = Array.isArray(data) ? data : [];
                     active = -1;
                     render();
-                } catch (e) { /* network hiccup: leave the box as-is */ }
+                } catch (e) {}
             }
-
             input.addEventListener('input', function () {
                 const q = input.value.trim();
                 clearTimeout(timer);
                 if (q.length < 2) { hide(); return; }
                 timer = setTimeout(() => query(q), 150);
             });
-
             input.addEventListener('keydown', function (e) {
                 if (box.classList.contains('hidden')) return;
                 if (e.key === 'ArrowDown') { e.preventDefault(); active = Math.min(active + 1, items.length - 1); render(); }
@@ -184,65 +308,30 @@
                 else if (e.key === 'Enter' && active >= 0) { e.preventDefault(); choose(items[active].name); }
                 else if (e.key === 'Escape') { hide(); }
             });
-
-            input.addEventListener('blur', () => setTimeout(hide, 120));
-        });
-    })();
-    </script>
-
-    <script>
-    // Subscribe / unsubscribe in place via fetch — no page reload, no scroll
-    // jump. Every toggle button for the same subreddit updates together.
-    document.addEventListener('click', async function (e) {
-        const btn = e.target.closest('[data-sub-toggle]');
-        if (!btn || btn.disabled) return;
-        e.preventDefault();
-
-        const sub = btn.dataset.subreddit;
-        const wasSubscribed = btn.dataset.subscribed === '1';
-        const csrf = document.querySelector('meta[name="csrf-token"]').content;
-        const peers = document.querySelectorAll('[data-sub-toggle][data-subreddit="' + CSS.escape(sub) + '"]');
-        peers.forEach(b => b.disabled = true);
-
-        try {
-            let res;
-            if (wasSubscribed) {
-                res = await fetch('/subs/' + encodeURIComponent(sub), {
-                    method: 'DELETE',
-                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json' },
-                });
-            } else {
-                res = await fetch('/subs', {
-                    method: 'POST',
-                    headers: { 'X-CSRF-TOKEN': csrf, 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
-                    body: new URLSearchParams({ subreddit: sub }),
-                });
-            }
-            if (!res.ok) throw new Error('request failed');
-            const data = await res.json();
-            const now = !!data.subscribed;
-
-            peers.forEach(function (b) {
-                b.dataset.subscribed = now ? '1' : '0';
-                b.textContent = now ? b.dataset.labelUnsub : b.dataset.labelSub;
-                b.className = b.dataset.classBase + ' ' + (now ? b.dataset.classUnsub : b.dataset.classSub);
-            });
-            showToast(data.message || (now ? 'Subscribed' : 'Unsubscribed'));
-        } catch (err) {
-            showToast('Something went wrong. Please try again.', true);
-        } finally {
-            peers.forEach(b => b.disabled = false);
+            input.addEventListener('blur', () => setTimeout(hide, 150));
+            window.addEventListener('scroll', () => { if (!box.classList.contains('hidden')) place(); }, { passive: true });
         }
-    });
-    </script>
 
-    <script>
-    // Register the service worker so the app is installable to the home screen.
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/sw.js').catch(() => {});
+        function initPage() {
+            document.querySelectorAll('input[data-sub-autocomplete]').forEach(initAutocomplete);
+            observeLoadMore();
+            showFlash();
+        }
+
+        // Strip body-appended helpers (dropdowns, toasts) before Turbo caches a
+        // snapshot, so restored pages are pristine and get re-initialised clean.
+        document.addEventListener('turbo:before-cache', function () {
+            document.querySelectorAll('[data-ac-box],[data-toast]').forEach(el => el.remove());
         });
-    }
+
+        document.addEventListener('turbo:load', initPage);
+        if (!window.Turbo) document.addEventListener('DOMContentLoaded', initPage);
+
+        // Service worker (installable / offline shell).
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('/sw.js').catch(function () {});
+        }
+    })();
     </script>
 </body>
 </html>

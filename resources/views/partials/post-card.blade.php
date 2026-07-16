@@ -46,7 +46,7 @@
         <div class="min-w-0 flex-1">
             <div class="flex items-center gap-1.5 text-xs text-neutral-500 mb-1 flex-wrap">
                 @unless ($hideSubreddit)
-                    <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 hover:text-white font-medium">r/{{ $p['subreddit'] }}</a>
+                    <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 hover:text-neutral-900 font-medium">r/{{ $p['subreddit'] }}</a>
                     <span>&middot;</span>
                 @endunless
                 <span>u/{{ $p['author'] ?? '[deleted]' }}</span>
@@ -66,7 +66,7 @@
 
             <div class="flex items-center gap-3 mt-2 text-xs text-neutral-400">
                 <span>&#9650; {{ \App\Services\Reddit::formatScore($p['score'] ?? 0) }}</span>
-                <a href="{{ $internalUrl }}" class="hover:text-white">&#128172; {{ \App\Services\Reddit::formatScore($p['num_comments'] ?? 0) }} comments</a>
+                <a href="{{ $internalUrl }}" class="hover:text-neutral-900">&#128172; {{ \App\Services\Reddit::formatScore($p['num_comments'] ?? 0) }} comments</a>
             </div>
         </div>
     </div>

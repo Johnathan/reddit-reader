@@ -37,10 +37,10 @@
                 <summary class="list-none cursor-pointer text-xs px-2.5 py-1.5 rounded-full bg-neutral-800 text-neutral-300 hover:bg-neutral-700 select-none">+ feed</summary>
                 <div class="absolute right-0 mt-1 z-20 w-44 rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl py-1">
                     @foreach ($myFeeds as $feed)
-                        <form method="POST" action="{{ route('feeds.subs.store', $feed) }}">
+                        <form method="POST" action="{{ route('feeds.subs.store', $feed) }}" data-ajax data-turbo="false">
                             @csrf
                             <input type="hidden" name="subreddit" value="{{ $name }}">
-                            <button class="w-full text-left px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800 truncate">{{ $feed->name }}</button>
+                            <button type="submit" class="w-full text-left px-3 py-1.5 text-xs text-neutral-200 hover:bg-neutral-800 truncate">{{ $feed->name }}</button>
                         </form>
                     @endforeach
                     <a href="{{ route('feeds.index') }}" class="block px-3 py-1.5 text-xs text-neutral-500 hover:bg-neutral-800 border-t border-neutral-800 mt-1">New feed&hellip;</a>

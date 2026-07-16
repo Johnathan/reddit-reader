@@ -10,13 +10,14 @@
             @endif
         </div>
 
+        @php $navActive = 'text-orange-500 font-medium'; $navIdle = 'text-neutral-300 hover:text-neutral-900'; @endphp
         <div class="flex items-center gap-4 text-sm shrink-0">
-            <a href="{{ route('explore') }}" class="text-neutral-300 hover:text-white">explore</a>
-            <a href="{{ route('feeds.index') }}" class="text-neutral-300 hover:text-white">feeds</a>
-            <a href="{{ route('subs.index') }}" class="text-neutral-300 hover:text-white">subs</a>
-            <form method="POST" action="{{ Route::has('logout') ? route('logout') : '#' }}">
+            <a href="{{ route('explore') }}" class="{{ request()->routeIs('explore') ? $navActive : $navIdle }}">explore</a>
+            <a href="{{ route('feeds.index') }}" class="{{ request()->routeIs('feeds.*') ? $navActive : $navIdle }}">feeds</a>
+            <a href="{{ route('subs.index') }}" class="{{ request()->routeIs('subs.*') ? $navActive : $navIdle }}">subs</a>
+            <form method="POST" action="{{ Route::has('logout') ? route('logout') : '#' }}" data-turbo="false">
                 @csrf
-                <button type="submit" class="text-neutral-400 hover:text-white">logout</button>
+                <button type="submit" class="text-neutral-400 hover:text-neutral-900">logout</button>
             </form>
         </div>
     </div>

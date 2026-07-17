@@ -44,4 +44,9 @@
     @empty
         <p class="text-neutral-500 text-sm">No subscriptions yet &mdash; search above to find subreddits.</p>
     @endforelse
+
+    <form method="POST" action="{{ Route::has('logout') ? route('logout') : '#' }}" data-turbo="false" class="mt-8 pt-4 border-t border-neutral-800">
+        @csrf
+        <button type="submit" class="text-sm text-neutral-500 hover:text-red-400">Log out</button>
+    </form>
 @endsection

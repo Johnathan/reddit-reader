@@ -42,8 +42,15 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.23/dist/turbo.es2017-umd.min.js"></script>
     <style>
+        :root { --topbar-h: 3rem; --tabbar-h: 3.5rem; }
         html { color-scheme: light; -webkit-text-size-adjust: 100%; }
+        html, body { overflow-x: hidden; }               /* never scroll sideways */
         body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+
+        /* Long URLs / code must wrap, never break the layout horizontally. */
+        .reddit-html { overflow-wrap: anywhere; word-break: break-word; }
+        .reddit-html a { overflow-wrap: anywhere; word-break: break-all; }
+        .reddit-html pre { white-space: pre-wrap; word-break: break-word; }
 
         /* iOS Safari zooms the page when focusing a form control with
            font-size < 16px; pin form controls to 16px on small screens. */
@@ -53,11 +60,24 @@
             select { font-size: 16px !important; }
         }
 
-        /* Native-feeling page transitions + Turbo's loading bar. */
         .turbo-progress-bar { height: 3px; background: #93611c; }
+
+        /* Native push/pop: the content slides directionally, the fixed top and
+           tab bars are lifted into their own view-transition groups so they
+           stay put (content slides UNDER them). */
+        header#app-topbar { view-transition-name: topbar; }
+        nav#app-tabbar { view-transition-name: tabbar; }
         @media (prefers-reduced-motion: no-preference) {
-            ::view-transition-old(root),
-            ::view-transition-new(root) { animation-duration: 0.2s; }
+            ::view-transition-group(root) { animation-duration: .32s; animation-timing-function: cubic-bezier(.32,.72,0,1); }
+            ::view-transition-group(topbar), ::view-transition-group(tabbar) { animation-duration: 0s; }
+            @keyframes vt-in-right { from { transform: translateX(100%); } }
+            @keyframes vt-out-left { to { transform: translateX(-22%); opacity: .5; } }
+            @keyframes vt-in-left { from { transform: translateX(-22%); opacity: .5; } }
+            @keyframes vt-out-right { to { transform: translateX(100%); } }
+            html[data-turbo-visit-direction="forward"]::view-transition-old(root) { animation-name: vt-out-left; }
+            html[data-turbo-visit-direction="forward"]::view-transition-new(root) { animation-name: vt-in-right; }
+            html[data-turbo-visit-direction="back"]::view-transition-old(root) { animation-name: vt-out-right; }
+            html[data-turbo-visit-direction="back"]::view-transition-new(root) { animation-name: vt-in-left; }
         }
 
         .reddit-html a { color: #93611c; text-decoration: underline; text-underline-offset: 2px; }
@@ -74,14 +94,20 @@
         .nsfw-img { transition: filter 0.15s ease; cursor: pointer; }
     </style>
 </head>
-<body class="bg-neutral-950 text-neutral-100 min-h-screen antialiased"
+<body class="bg-neutral-950 text-neutral-100 antialiased"
       @if (session('status') || session('error')) data-flash="{{ session('error') ?: session('status') }}" data-flash-error="{{ session('error') ? '1' : '0' }}" @endif>
-    @include('partials.nav')
+    @include('partials.top-bar')
 
-    <main class="max-w-2xl mx-auto pt-4"
-          style="padding-left: max(0.75rem, env(safe-area-inset-left)); padding-right: max(0.75rem, env(safe-area-inset-right)); padding-bottom: calc(6rem + env(safe-area-inset-bottom));">
+    <main class="max-w-2xl mx-auto"
+          style="padding-left: max(0.75rem, env(safe-area-inset-left));
+                 padding-right: max(0.75rem, env(safe-area-inset-right));
+                 padding-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 0.5rem);
+                 padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 1rem);
+                 min-height: 100dvh;">
         @yield('content')
     </main>
+
+    @include('partials.tab-bar')
 
     <script>
     // One boot for the app's whole lifetime. Turbo re-runs body scripts on each
@@ -375,9 +401,20 @@
             window.addEventListener('scroll', () => { if (!box.classList.contains('hidden')) place(); }, { passive: true });
         }
 
+        // The tab bar is data-turbo-permanent (never re-rendered), so highlight
+        // the active tab client-side on every visit.
+        function updateTabs() {
+            document.querySelectorAll('#app-tabbar a[data-active-when]').forEach(function (a) {
+                const active = new RegExp(a.dataset.activeWhen).test(location.pathname);
+                a.classList.toggle('text-orange-500', active);
+                a.classList.toggle('text-neutral-400', !active);
+            });
+        }
+
         function initPage() {
             document.querySelectorAll('input[data-sub-autocomplete]').forEach(initAutocomplete);
             observeLoadMore();
+            updateTabs();
             showFlash();
         }
 

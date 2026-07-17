@@ -44,10 +44,13 @@
     <style>
         :root { --topbar-h: 3rem; --tabbar-h: 3.5rem; }
         html { color-scheme: light; -webkit-text-size-adjust: 100%; }
-        html, body { overflow-x: hidden; }               /* never scroll sideways */
-        body { -webkit-tap-highlight-color: transparent; overscroll-behavior-y: none; }
+        body { -webkit-tap-highlight-color: transparent; }
 
-        /* Long URLs / code must wrap, never break the layout horizontally. */
+        /* Keep content from overflowing sideways WITHOUT clamping the page's
+           scroll container (overflow-x:hidden on html/body breaks scrolling on
+           iOS). overflow-x:clip clips horizontally but never creates a scroll
+           container, so vertical scrolling is untouched. */
+        main { overflow-x: clip; }
         .reddit-html { overflow-wrap: anywhere; word-break: break-word; }
         .reddit-html a { overflow-wrap: anywhere; word-break: break-all; }
         .reddit-html pre { white-space: pre-wrap; word-break: break-word; }

@@ -15,7 +15,8 @@
     $seed = $seed ?? null;
 @endphp
 
-<div class="flex items-center justify-between gap-2 bg-neutral-900 rounded-lg px-3 py-2">
+<div data-unfold-card class="bg-neutral-900 rounded-lg">
+<div class="flex items-center justify-between gap-2 px-3 py-2">
     <div class="min-w-0">
         <a href="{{ route('subreddit.show', strtolower($name)) }}" class="font-medium hover:text-orange-300">r/{{ $name }}</a>
         <div class="text-xs text-neutral-500 truncate">
@@ -49,5 +50,17 @@
         @endif
 
         @include('partials.subscribe-button', ['subreddit' => $name, 'subscribed' => $subscribed, 'subscribedLabel' => 'Subscribed'])
+
+        <button type="button" data-unfold aria-expanded="false"
+                data-url="{{ route('subreddit.preview', strtolower($name)) }}"
+                aria-label="Preview r/{{ $name }}"
+                class="p-1 text-neutral-500 hover:text-orange-500">
+            <svg viewBox="0 0 24 24" class="w-4 h-4 transition-transform duration-150" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M6 9l6 6 6-6"/>
+            </svg>
+        </button>
     </div>
+</div>
+
+<div data-unfold-panel hidden class="border-t border-neutral-800 px-3 py-2"></div>
 </div>

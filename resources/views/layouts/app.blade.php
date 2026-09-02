@@ -42,9 +42,44 @@
     </script>
     <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.23/dist/turbo.es2017-umd.min.js"></script>
     <style>
-        :root { --topbar-h: 3rem; --tabbar-h: 3.5rem; }
+        :root { --topbar-h: 3rem; --tabbar-h: 3.5rem; --sidebar-w: 15rem; --shell-gap: 1.5rem; --shell-max: 42rem; }
         html { color-scheme: light; -webkit-text-size-adjust: 100%; }
         body { -webkit-tap-highlight-color: transparent; }
+
+        /* Mobile: a single centred column, exactly as before (this pair of
+           rules replaces the max-w-2xl/mx-auto that used to sit on <main>). */
+        .shell, .topbar-inner { max-width: var(--shell-max); margin-inline: auto; }
+
+        /* Desktop: put the wasted horizontal space to work as a nav rail. The
+           tab bar hides, so its height reserves nothing at the foot of the
+           page. Nothing in here applies below 1024px. */
+        @media (min-width: 1024px) {
+            :root { --tabbar-h: 0rem; --shell-max: 60rem; }
+
+            .shell { display: flex; gap: var(--shell-gap); }
+            .shell > main { flex: 1 1 0; min-width: 0; max-width: 42rem; }
+
+            /* The aside stretches to the row height, so the nav inside it can
+               stick under the fixed top bar while the feed scrolls past. */
+            .sidebar-sticky {
+                position: sticky;
+                top: calc(var(--topbar-h) + env(safe-area-inset-top) + 0.5rem);
+                margin-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 0.5rem);
+                max-height: calc(100dvh - var(--topbar-h) - 1.5rem);
+            }
+
+            /* Line the top bar up with the columns beneath it: the rail spans
+               the sidebar plus the gutter, so the title starts exactly where
+               the feed's text does. flex-1 + min-width:0 lets a long feed name
+               truncate instead of shoving the search box off the edge. */
+            /* Scoped by id: the Tailwind CDN appends its sheet after this one,
+               so a bare .topbar-title would lose to its .absolute utility. */
+            #app-topbar .topbar-rail { width: calc(var(--sidebar-w) + var(--shell-gap)); flex: none; }
+            #app-topbar .topbar-title {
+                position: static; transform: none; max-width: none;
+                text-align: left; flex: 1 1 auto; min-width: 0;
+            }
+        }
 
         /* Keep content from overflowing sideways WITHOUT clamping the page's
            scroll container (overflow-x:hidden on html/body breaks scrolling on
@@ -83,6 +118,23 @@
             html[data-turbo-visit-direction="back"]::view-transition-new(root) { animation-name: vt-in-left; }
         }
 
+        /* A horizontal push/pop is a phone idiom — it reads as a glitch beside
+           a static sidebar. Desktop cross-fades instead. These selectors match
+           the specificity of the directional rules above and come later, so
+           they win. The sidebar is lifted out of the root group so it holds
+           still like the top bar does. */
+        #app-sidebar { view-transition-name: sidebar; }
+        @media (min-width: 1024px) and (prefers-reduced-motion: no-preference) {
+            @keyframes vt-fade-in { from { opacity: 0; } }
+            @keyframes vt-fade-out { to { opacity: 0; } }
+            ::view-transition-group(root) { animation-duration: .18s; }
+            ::view-transition-group(sidebar) { animation-duration: 0s; }
+            html[data-turbo-visit-direction="forward"]::view-transition-old(root),
+            html[data-turbo-visit-direction="back"]::view-transition-old(root) { animation-name: vt-fade-out; }
+            html[data-turbo-visit-direction="forward"]::view-transition-new(root),
+            html[data-turbo-visit-direction="back"]::view-transition-new(root) { animation-name: vt-fade-in; }
+        }
+
         .reddit-html a { color: #93611c; text-decoration: underline; text-underline-offset: 2px; }
         .reddit-html p { margin: 0.5em 0; }
         .reddit-html blockquote { border-left: 3px solid #cbbb98; padding-left: 0.75em; margin: 0.5em 0; color: #6a6250; }
@@ -95,20 +147,68 @@
         .reddit-html table { border-collapse: collapse; display: block; overflow-x: auto; }
         .reddit-html th, .reddit-html td { border: 1px solid #d9ccb2; padding: 0.3em 0.6em; }
         .nsfw-img { transition: filter 0.15s ease; cursor: pointer; }
+
+        /* Posts you've already opened: the title quiets down, visited-link
+           style, so the unread ones stand out when scanning the feed. */
+        [data-mark-read].post-read { color: #8a7f68; font-weight: 400; }
+        [data-mark-read].post-read:hover { color: #b8843a; }
+
+        /* Small icon buttons get a finger-sized hit area without changing the
+           layout: the pseudo-element overflows the button invisibly. Apple asks
+           for 44pt, Material for 48dp, WCAG 2.2 AA for 24px — a 16px icon plus
+           14px of overflow each way clears all three at 44px. */
+        .tap-target { position: relative; }
+        .tap-target::after { content: ''; position: absolute; inset: -14px -12px; }
+
+        /* Swipe-to-save. touch-action: pan-y is what makes this feel native —
+           it tells the compositor that vertical scrolling is still its job and
+           only the horizontal axis is ours, so the feed never stutters waiting
+           on JS. Without it we'd have to preventDefault in a non-passive
+           touchmove and fight the scroller. */
+        [data-swipe] { touch-action: pan-y; will-change: transform; background-color: #efe7d6; }
+        [data-swipe-wrap] { position: relative; overflow: hidden; }
+        [data-swipe-bg] {
+            position: absolute; inset: 0; display: flex; align-items: center;
+            padding-left: 1.25rem; pointer-events: none; opacity: 0;
+        }
+        @media (prefers-reduced-motion: no-preference) {
+            [data-swipe].swipe-settling { transition: transform .28s cubic-bezier(.32,.72,0,1); }
+        }
+
+        /* oEmbed markup arrives with the provider's own fixed width/height. */
+        .expando-embed iframe { width: 100%; height: auto; aspect-ratio: 16 / 9; border: 0; border-radius: 0.5rem; display: block; }
+
+        /* Reading-list reader: a paged deck. The deck fills the space between
+           the top and tab bars so only the cards scroll, never the page; each
+           card scrolls vertically to read, the deck scrolls horizontally to
+           swipe between posts. CSS scroll-snap does the swipe natively. */
+        .reader-deck {
+            height: calc(100dvh - var(--topbar-h) - var(--tabbar-h)
+                         - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 3.5rem);
+            scroll-behavior: smooth;
+            scrollbar-width: none;
+        }
+        .reader-deck::-webkit-scrollbar { width: 0; height: 0; }
+        .reader-card { scroll-snap-stop: always; }
     </style>
 </head>
 <body class="bg-neutral-950 text-neutral-100 antialiased"
       @if (session('status') || session('error')) data-flash="{{ session('error') ?: session('status') }}" data-flash-error="{{ session('error') ? '1' : '0' }}" @endif>
     @include('partials.top-bar')
 
-    <main class="max-w-2xl mx-auto"
-          style="padding-left: max(0.75rem, env(safe-area-inset-left));
-                 padding-right: max(0.75rem, env(safe-area-inset-right));
-                 padding-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 0.5rem);
-                 padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 1rem);
-                 min-height: 100dvh;">
-        @yield('content')
-    </main>
+    <div class="shell">
+        @include('partials.sidebar')
+
+        <main style="padding-left: max(0.75rem, env(safe-area-inset-left));
+                     padding-right: max(0.75rem, env(safe-area-inset-right));
+                     padding-top: calc(var(--topbar-h) + env(safe-area-inset-top) + 0.5rem);
+                     padding-bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 1rem);
+                     min-height: 100dvh;">
+            @yield('content')
+        </main>
+    </div>
+
+    @include('partials.reading-dock')
 
     @include('partials.tab-bar')
 
@@ -196,14 +296,29 @@
         };
 
         // ---- collapse/expand a comment (its OWN subtree, not an ancestor's) --
-        window.toggleComment = function (btn) {
-            const c = btn.closest('[data-comment]');
+        // Triggers live in two places: the header row and the vertical thread
+        // line. Both sit inside the same [data-comment-wrap], so resolve the
+        // target from there — the thread line is a SIBLING of [data-comment],
+        // so closest('[data-comment]') from it would grab the parent comment.
+        window.toggleComment = function (el) {
+            const wrap = el.closest('[data-comment-wrap]');
+            const c = wrap && wrap.querySelector(':scope > [data-comment]');
             if (!c) return;
             const body = c.querySelector(':scope > .comment-body-wrap > .comment-collapsible');
             if (!body) return;
             const collapsed = body.classList.toggle('hidden');
-            btn.textContent = collapsed ? '[+]' : '[-]';
+            const label = c.querySelector(':scope > .comment-head > [data-collapse-btn]');
+            if (label) label.textContent = collapsed ? '[+]' : '[-]';
         };
+
+        // The [-] button lives inside the clickable header, so it needs no
+        // handler of its own — its click bubbles up to exactly one trigger.
+        document.addEventListener('click', function (e) {
+            const t = e.target.closest('[data-collapse]');
+            if (!t || e.target.closest('a')) return;
+            e.preventDefault();
+            toggleComment(t);
+        });
 
         function showFlash() {
             var b = document.body;
@@ -294,6 +409,753 @@
             }
         });
 
+        // ---- reading list: add from the feed, peek at the sticky pad --------
+        // Saving is optimistic: the icon flips immediately and rolls back only
+        // if the request fails, so a tap never interrupts a scroll.
+        function readingApi(url, method, body) {
+            return fetch(url, {
+                method: method,
+                headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' },
+                body: body,
+            }).then(function (r) {
+                if (!r.ok) throw new Error('failed');
+                return r.json();
+            });
+        }
+
+        function paintLaterButton(btn, saved) {
+            btn.dataset.inlist = saved ? '1' : '0';
+            btn.setAttribute('aria-pressed', saved ? 'true' : 'false');
+            btn.setAttribute('aria-label', saved ? 'Remove from reading list' : 'Add to reading list');
+            btn.classList.toggle('text-orange-500', saved);
+            btn.classList.toggle('hover:text-orange-500', !saved);
+            const icon = btn.querySelector('[data-later-icon]');
+            if (icon) icon.setAttribute('fill', saved ? 'currentColor' : 'none');
+            const label = btn.querySelector('[data-later-label]');
+            if (label) label.textContent = saved ? 'In list' : 'Read later';
+        }
+
+        // Every card for the same post moves together (feed + post page).
+        function paintAllLaterButtons(postId, saved) {
+            document.querySelectorAll('[data-later][data-post-id="' + CSS.escape(postId) + '"]')
+                .forEach(function (b) { paintLaterButton(b, saved); });
+        }
+
+        function updateDock(state) {
+            const dock = document.getElementById('reading-dock');
+            if (!dock) return;
+            dock.dataset.count = state.count;
+            dock.classList.toggle('hidden', state.count === 0);
+            const count = dock.querySelector('[data-dock-count]');
+            if (count) count.textContent = state.count;
+            const unread = dock.querySelector('[data-dock-unread]');
+            if (unread) {
+                unread.textContent = state.unread;
+                unread.classList.toggle('hidden', !state.unread);
+            }
+            const empty = dock.querySelector('[data-dock-empty]');
+            if (empty) empty.classList.toggle('hidden', state.count !== 0);
+        }
+
+        function addDockRow(item) {
+            const list = document.querySelector('[data-dock-items]');
+            if (!list || list.querySelector('[data-dock-row][data-post-id="' + CSS.escape(item.post_id) + '"]')) return;
+            const row = document.createElement('div');
+            row.dataset.dockRow = '';
+            row.dataset.postId = item.post_id;
+            row.className = 'flex items-start gap-2 px-3 py-2 hover:bg-neutral-800/60';
+            const link = document.createElement('a');
+            link.href = item.url;
+            link.className = 'min-w-0 flex-1 group';
+            const title = document.createElement('span');
+            title.className = 'block text-xs leading-snug text-neutral-200 group-hover:text-orange-300 line-clamp-2';
+            title.textContent = item.title;
+            const meta = document.createElement('span');
+            meta.className = 'block text-[11px] text-neutral-500 mt-0.5';
+            meta.textContent = 'r/' + item.subreddit;
+            link.appendChild(title); link.appendChild(meta);
+            const del = document.createElement('button');
+            del.type = 'button';
+            del.dataset.dockRemove = '';
+            del.dataset.postId = item.post_id;
+            del.setAttribute('aria-label', 'Remove from reading list');
+            del.className = 'shrink-0 p-1 -mr-1 text-neutral-600 hover:text-red-400';
+            del.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
+            row.appendChild(link); row.appendChild(del);
+            list.prepend(row);
+        }
+
+        function dropRows(postId) {
+            document.querySelectorAll('[data-dock-row][data-post-id="' + CSS.escape(postId) + '"],' +
+                '[data-reading-row][data-post-id="' + CSS.escape(postId) + '"]')
+                .forEach(function (el) {
+                    el.style.transition = 'opacity .2s';
+                    el.style.opacity = '0';
+                    setTimeout(function () { el.remove(); }, 200);
+                });
+        }
+
+        document.addEventListener('click', async function (e) {
+            // -- save / unsave -------------------------------------------------
+            const save = e.target.closest('[data-later]');
+            if (save) {
+                e.preventDefault();
+                if (save.__busy) return;
+                save.__busy = true;
+                const d = save.dataset;
+                const wasSaved = d.saved === '1';
+                paintAllLaterButtons(d.postId, !wasSaved);   // optimistic
+                try {
+                    let state;
+                    if (wasSaved) {
+                        state = await readingApi('/reading-list/' + encodeURIComponent(d.postId), 'POST',
+                            new URLSearchParams({ _method: 'DELETE' }));
+                        dropRows(d.postId);
+                    } else {
+                        state = await readingApi(@json(route('reading.store')), 'POST', new URLSearchParams({
+                            post_id: d.postId, subreddit: d.subreddit, title: d.title, slug: d.slug || '',
+                            thumbnail: d.thumbnail || '', score: d.score || 0, num_comments: d.comments || 0,
+                            source: d.source || 'reddit', url: d.url || '',
+                        }));
+                        if (state.item) addDockRow(state.item);
+                    }
+                    updateDock(state);
+                } catch (err) {
+                    paintAllLaterButtons(d.postId, wasSaved);   // roll back
+                    showToast('Could not update your reading list.', true);
+                } finally {
+                    save.__busy = false;
+                }
+                return;
+            }
+
+            // -- flip the pad open / shut --------------------------------------
+            const toggle = e.target.closest('[data-dock-toggle]');
+            if (toggle) {
+                e.preventDefault();
+                const panel = document.querySelector('[data-dock-panel]');
+                if (panel) {
+                    panel.hidden = !panel.hidden;
+                    toggle.setAttribute('aria-expanded', panel.hidden ? 'false' : 'true');
+                }
+                return;
+            }
+
+            // -- remove (from the pad or the full list) ------------------------
+            const remove = e.target.closest('[data-dock-remove],[data-reading-remove]');
+            if (remove) {
+                e.preventDefault();
+                const id = remove.dataset.postId;
+                dropRows(id);
+                paintAllLaterButtons(id, false);
+                try {
+                    updateDock(await readingApi('/reading-list/' + encodeURIComponent(id), 'POST',
+                        new URLSearchParams({ _method: 'DELETE' })));
+                } catch (err) {
+                    showToast('Could not remove that.', true);
+                }
+                return;
+            }
+
+            // -- mark read / unread --------------------------------------------
+            const read = e.target.closest('[data-reading-read]');
+            if (read) {
+                e.preventDefault();
+                try {
+                    const state = await readingApi('/reading-list/' + encodeURIComponent(read.dataset.postId) + '/read', 'POST');
+                    read.setAttribute('aria-pressed', state.read ? 'true' : 'false');
+                    read.classList.toggle('text-emerald-400', state.read);
+                    read.classList.toggle('hover:text-emerald-400', !state.read);
+                    const lbl = read.querySelector('[data-reading-read-label]');
+                    if (lbl) lbl.textContent = state.read ? 'Read' : 'Mark read';
+                    const row = read.closest('[data-reading-row]');
+                    if (row) row.classList.toggle('opacity-50', state.read);
+                    const n = document.querySelector('[data-list-unread]');
+                    if (n) n.textContent = state.unread;
+                    updateDock(state);
+                } catch (err) {
+                    showToast('Could not update that.', true);
+                }
+                return;
+            }
+
+            // -- clear the list ------------------------------------------------
+            const clear = e.target.closest('[data-list-clear]');
+            if (clear) {
+                e.preventDefault();
+                const readOnly = clear.hasAttribute('data-read-only');
+                const ok = await confirmDialog(
+                    readOnly ? 'Clear everything you have already read?' : 'Clear the whole reading list?',
+                    { danger: !readOnly, okLabel: 'Clear' },
+                );
+                if (!ok) return;
+                try {
+                    const state = await readingApi(@json(route('reading.clear')), 'POST',
+                        new URLSearchParams({ _method: 'DELETE', read_only: readOnly ? '1' : '0' }));
+                    showToast(state.message);
+                    Turbo ? Turbo.visit(location.href, { action: 'replace' }) : location.reload();
+                } catch (err) {
+                    showToast('Could not clear the list.', true);
+                }
+            }
+        });
+
+        // ---- archive: keep a copy of a post or comment ----------------------
+        // Not optimistic like "read later": the server has to fetch and archive
+        // the content, so the button shows it is working and only flips once
+        // the copy actually exists.
+        function paintArchiveButton(btn, on) {
+            btn.dataset.archived = on ? '1' : '0';
+            btn.setAttribute('aria-pressed', on ? 'true' : 'false');
+            btn.setAttribute('aria-label', on ? 'Remove from archive' : 'Save to archive');
+            btn.classList.toggle('text-emerald-400', on);
+            btn.classList.toggle('hover:text-emerald-400', !on);
+            const icon = btn.querySelector('[data-archive-icon]');
+            if (icon) icon.setAttribute('fill', on ? 'currentColor' : 'none');
+            const label = btn.querySelector('[data-archive-label]');
+            if (label) label.textContent = on ? 'Saved' : 'Save';
+        }
+
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('[data-archive]');
+            if (!btn || btn.__busy) return;
+            e.preventDefault();
+
+            const d = btn.dataset;
+            const on = d.archived === '1';
+            btn.__busy = true;
+            btn.classList.add('opacity-50');
+
+            try {
+                let res;
+                if (on) {
+                    res = await readingApi('/saved/' + encodeURIComponent(d.redditId), 'POST',
+                        new URLSearchParams({ _method: 'DELETE' }));
+                    const row = btn.closest('[data-saved-row]');
+                    if (row) { row.style.transition = 'opacity .2s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 200); }
+                } else {
+                    res = await readingApi(@json(route('saved.store')), 'POST', new URLSearchParams({
+                        kind: d.kind, reddit_id: d.redditId, subreddit: d.subreddit, post_id: d.postId || '',
+                        source: d.source || 'reddit', url: d.url || '',
+                    }));
+                }
+                document.querySelectorAll('[data-archive][data-reddit-id="' + CSS.escape(d.redditId) + '"]')
+                    .forEach(function (b) { paintArchiveButton(b, !on); });
+                showToast(res.message);
+            } catch (err) {
+                showToast('Could not update your archive.', true);
+            } finally {
+                btn.__busy = false;
+                btn.classList.remove('opacity-50');
+            }
+        });
+
+        // Folder / tags / note save on blur — no explicit save button to hunt.
+        document.addEventListener('change', async function (e) {
+            const field = e.target.closest('[data-organise]');
+            if (!field) return;
+
+            // "+ New folder…" opens the inline name input instead of saving.
+            if (field.dataset.organise === 'folder' && field.value === '__new__') {
+                field.value = field.dataset.prev || '';
+                const input = field.parentElement.querySelector('[data-new-folder]');
+                if (input) { input.hidden = false; input.focus(); }
+                return;
+            }
+            if (field.dataset.organise === 'folder') field.dataset.prev = field.value;
+
+            const body = new URLSearchParams({ _method: 'PATCH' });
+            body.set(field.dataset.organise === 'folder' ? 'folder_id' : field.dataset.organise, field.value);
+            try {
+                await readingApi('/saved/' + encodeURIComponent(field.dataset.id), 'POST', body);
+                showToast('Updated');
+            } catch (err) {
+                showToast('Could not save that change.', true);
+            }
+        });
+
+        // Create the folder, file the item in it, and teach every other
+        // Organise popover on the page about it — no reload.
+        async function createFolderInline(input) {
+            const name = input.value.trim();
+            if (!name) { input.hidden = true; return; }
+            try {
+                const folder = await readingApi(@json(route('saved.folders.store')), 'POST',
+                    new URLSearchParams({ name: name }));
+
+                document.querySelectorAll('select[data-organise="folder"]').forEach(function (sel) {
+                    if ([...sel.options].some(o => o.value === String(folder.id))) return;
+                    const newOpt = [...sel.options].find(o => o.value === '__new__');
+                    sel.insertBefore(new Option(folder.name, folder.id), newOpt || null);
+                });
+
+                const sel = input.parentElement.querySelector('select[data-organise="folder"]');
+                if (sel) { sel.value = String(folder.id); sel.dataset.prev = String(folder.id); }
+
+                await readingApi('/saved/' + encodeURIComponent(input.dataset.id), 'POST',
+                    new URLSearchParams({ _method: 'PATCH', folder_id: folder.id }));
+
+                showToast('Filed under “' + folder.name + '”');
+                input.value = '';
+                input.hidden = true;
+            } catch (err) {
+                showToast('Could not create that folder.', true);
+            }
+        }
+
+        document.addEventListener('keydown', function (e) {
+            const input = e.target.closest('[data-new-folder]');
+            if (input && e.key === 'Enter') { e.preventDefault(); createFolderInline(input); }
+            if (input && e.key === 'Escape') { input.value = ''; input.hidden = true; }
+        });
+
+        document.addEventListener('focusout', function (e) {
+            const input = e.target.closest('[data-new-folder]');
+            if (input && !input.hidden) createFolderInline(input);
+        });
+
+        // ---- swipe a card to the right to save it ---------------------------
+        // Tuned from the platform gesture specs rather than guessed:
+        //
+        //  * EDGE_GUARD — iOS Safari's back/forward swipe lives in the outer
+        //    ~20px and is NOT governed by touch-action, so a gesture starting
+        //    there is left alone entirely. Fighting it (preventDefault on
+        //    touchstart) is possible but steals the user's way back.
+        //  * LOCK_SLOP / LOCK_RATIO — decide scroll-vs-swipe from the first few
+        //    pixels, then commit. Without direction locking a diagonal drag
+        //    fights the scroller and feels broken.
+        //  * COMMIT_FRACTION / COMMIT_MIN — Material's swipe-to-dismiss uses a
+        //    positional threshold (56dp) OR a velocity fling; matching both
+        //    means a slow deliberate drag and a quick flick both work.
+        //  * RESIST — past the commit point the card gets heavier, which is the
+        //    tactile cue that you have gone far enough.
+        const EDGE_GUARD = 24;
+        const LOCK_SLOP = 8;
+        const LOCK_RATIO = 1.2;
+        const COMMIT_FRACTION = 0.25;
+        const COMMIT_MIN = 64;
+        const FLING_VELOCITY = 0.45;   // px/ms
+        const FLING_MIN = 40;
+        const VELOCITY_WINDOW = 120;   // ms of trailing movement to average
+        const MIN_VELOCITY_SPAN = 16;  // ~1 frame; below this we can't measure
+        const MAX_OVERPULL = 44;   // how far past the commit point it can stretch
+        const RESIST = 0.35;
+
+        let sw = null;
+
+        function swipeCommitDistance(card) {
+            return Math.max(COMMIT_MIN, card.offsetWidth * COMMIT_FRACTION);
+        }
+
+        function swipePaint(card, dx) {
+            card.style.transform = dx ? 'translate3d(' + dx + 'px,0,0)' : '';
+            const bg = card.parentElement.querySelector('[data-swipe-bg]');
+            if (bg) {
+                const p = Math.min(1, dx / swipeCommitDistance(card));
+                bg.style.opacity = p;
+                // The icon grows as you approach the commit point, then pops.
+                bg.style.transform = 'scale(' + (0.8 + 0.2 * p) + ')';
+            }
+        }
+
+        function swipeSettle(card, then) {
+            card.classList.add('swipe-settling');
+            swipePaint(card, 0);
+            setTimeout(function () {
+                card.classList.remove('swipe-settling');
+                card.style.transform = '';
+                if (then) then();
+            }, 280);
+        }
+
+        document.addEventListener('touchstart', function (e) {
+            if (e.touches.length !== 1) { sw = null; return; }
+            const t = e.touches[0];
+
+            // Leave the system's back/forward gesture alone.
+            if (t.clientX < EDGE_GUARD || t.clientX > window.innerWidth - EDGE_GUARD) { sw = null; return; }
+
+            const card = e.target.closest('[data-swipe]');
+            if (!card || e.target.closest('a,button')) { sw = null; return; }
+
+            sw = { card: card, x0: t.clientX, y0: t.clientY, t0: e.timeStamp, dx: 0, raw: 0, axis: null,
+                   samples: [{ x: t.clientX, t: e.timeStamp }] };
+            card.classList.remove('swipe-settling');
+        }, { passive: true });
+
+        document.addEventListener('touchmove', function (e) {
+            if (!sw || e.touches.length !== 1) return;
+            const t = e.touches[0];
+            const dx = t.clientX - sw.x0;
+            const dy = t.clientY - sw.y0;
+
+            // Decide once, then commit to that axis for the whole gesture.
+            if (!sw.axis) {
+                if (Math.abs(dy) > LOCK_SLOP && Math.abs(dy) > Math.abs(dx)) { sw = null; return; }
+                if (Math.abs(dx) > LOCK_SLOP && Math.abs(dx) > Math.abs(dy) * LOCK_RATIO) sw.axis = 'x';
+                else return;
+            }
+
+            // How far the finger actually travelled decides whether we commit;
+            // the rubber-banded value below is only what gets drawn. Conflating
+            // the two means a clamped visual can make the threshold
+            // unreachable.
+            sw.raw = dx;
+
+            // Rightward only; a left drag just rubber-bands against the stop.
+            let pull = dx;
+            const commit = swipeCommitDistance(sw.card);
+            if (pull < 0) pull = pull * RESIST * 0.5;
+            else if (pull > commit) pull = commit + (pull - commit) * RESIST;
+            sw.dx = Math.max(-24, Math.min(commit + MAX_OVERPULL, pull));
+
+            // Keep a short trailing window so the release velocity reflects how
+            // the finger was moving at the END, not the average over a gesture
+            // that may have paused halfway.
+            sw.samples.push({ x: t.clientX, t: e.timeStamp });
+            while (sw.samples.length > 2 && e.timeStamp - sw.samples[0].t > VELOCITY_WINDOW) sw.samples.shift();
+
+            swipePaint(sw.card, sw.dx);
+        }, { passive: true });   // touch-action: pan-y does the blocking for us
+
+        document.addEventListener('touchend', function (e) {
+            if (!sw) return;
+            const card = sw.card;
+
+            if (sw.axis !== 'x') { sw = null; return; }
+
+            // Velocity over the trailing window. If the samples span too little
+            // time to measure honestly, call it zero rather than dividing by
+            // ~0 and treating a twitch as a fling.
+            const first = sw.samples[0];
+            const last = sw.samples[sw.samples.length - 1];
+            const span = last.t - first.t;
+            const velocity = span >= MIN_VELOCITY_SPAN ? (last.x - first.x) / span : 0;
+
+            const past = sw.raw >= swipeCommitDistance(card);
+            const flung = velocity >= FLING_VELOCITY && sw.raw >= FLING_MIN;
+
+            if (past || flung) {
+                // Fire on release, not after the settle animation — waiting for
+                // the card to slide home first makes the action feel laggy.
+                // Reuse the button's own handler so the optimistic update,
+                // rollback and dock refresh all behave identically.
+                const btn = card.querySelector('[data-later]');
+                if (btn) btn.click();
+            }
+
+            swipeSettle(card);
+
+            sw = null;
+        }, { passive: true });
+
+        document.addEventListener('touchcancel', function () {
+            if (sw) swipeSettle(sw.card);
+            sw = null;
+        }, { passive: true });
+
+        // ---- read posts + "new comments since" badges (RES-style) -----------
+        // Server-side: seen_items rows record what you've opened and at what
+        // comment count, so every device renders the same dimming and "+N
+        // new" badges. Feed HTML arrives already marked; the JS here only
+        // (a) dims a card instantly when you click through — the destination
+        // page records it — and (b) reports expando opens, which never load a
+        // page the server could record from.
+        function paintCardRead(card) {
+            card.querySelectorAll('[data-mark-read]').forEach(function (a) { a.classList.add('post-read'); });
+        }
+
+        function reportSeen(key) {
+            fetch(@json(route('seen.store')), {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json', 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: new URLSearchParams({ key: key }),
+                keepalive: true,   // survives an immediate navigation
+            }).catch(function () {});
+        }
+
+        // Clicking through to a post: dim it right away for this page's
+        // lifetime; the post page itself records the visit.
+        document.addEventListener('click', function (e) {
+            const link = e.target.closest('[data-mark-read]');
+            if (!link) return;
+            const card = link.closest('[data-seen]');
+            if (card) paintCardRead(card);
+        });
+
+        // One-time migration of the retired localStorage tracker.
+        (function () {
+            let old = null;
+            try { old = JSON.parse(localStorage.getItem('reader:seen')); } catch (e) {}
+            if (!old || !Object.keys(old).length) { try { localStorage.removeItem('reader:seen'); } catch (e) {} return; }
+            fetch(@json(route('seen.import')), {
+                method: 'POST',
+                headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                body: JSON.stringify({ items: old }),
+            }).then(function (r) {
+                if (r.ok) { try { localStorage.removeItem('reader:seen'); } catch (e) {} }
+            }).catch(function () {});
+        })();
+
+        // ---- RES-style inline expandos --------------------------------------
+        // Media is built on first open, never up front, so a feed of image and
+        // video posts costs no bandwidth until you ask to see it.
+        function nsfwImage(img, nsfw) {
+            if (!nsfw) return img;
+            img.classList.add('blur-md', 'nsfw-img');
+            img.addEventListener('click', function (e) {
+                e.preventDefault();
+                img.classList.toggle('blur-md');
+            });
+            return img;
+        }
+
+        // ---- Reddit video with SOUND -----------------------------------------
+        // The fallback mp4 is DASH's video track alone (audio ships separately),
+        // which is why v.redd.it videos played silent with a dead volume
+        // control. The HLS playlist muxes both: Safari/iOS play it natively,
+        // everything else gets hls.js — loaded from CDN only when a video that
+        // needs it actually appears, and told not to buffer until you hit play.
+        const HLS_CDN = 'https://cdn.jsdelivr.net/npm/hls.js@1.7.1/dist/hls.min.js';
+        let hlsLib = null;
+        function loadHlsLib() {
+            return hlsLib ??= new Promise(function (resolve) {
+                const s = document.createElement('script');
+                s.src = HLS_CDN;
+                s.onload = resolve;
+                s.onerror = resolve;   // resolve anyway; caller falls back to mp4
+                document.head.appendChild(s);
+            });
+        }
+
+        function setupHlsVideo(el, hlsUrl, fallback) {
+            if (!hlsUrl || el.__hlsSetup) return;
+            el.__hlsSetup = true;
+
+            // hls.js FIRST, canPlayType only as the no-MSE fallback. Desktop
+            // Chrome now answers "maybe" to application/vnd.apple.mpegurl but
+            // its built-in HLS stalls on v.redd.it playlists (observed on
+            // Chrome 151: loadstart, then nothing, forever) — so trusting
+            // canPlayType first broke every video. Only Safari/iOS, where MSE
+            // is absent or hls.js unsupported, should take the native path.
+            if (!('MediaSource' in window)) {
+                if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                    el.innerHTML = '';        // drop any <source> so src wins
+                    el.src = hlsUrl;
+                }
+                return;   // no MSE, no native HLS: keep the silent mp4 over nothing
+            }
+
+            loadHlsLib().then(function () {
+                if (!window.Hls || !Hls.isSupported()) {
+                    // CDN blocked or MSE too limited (e.g. iPad Safari):
+                    // native HLS is the next best thing.
+                    if (el.canPlayType('application/vnd.apple.mpegurl')) {
+                        el.innerHTML = '';
+                        el.src = hlsUrl;
+                    }
+                    return;
+                }
+                const h = new Hls({ autoStartLoad: false });
+                h.on(Hls.Events.ERROR, function (_, data) {
+                    if (!data.fatal) return;
+                    h.destroy();
+                    el.innerHTML = '';
+                    if (fallback) el.src = fallback;
+                });
+                el.innerHTML = '';
+                el.removeAttribute('src');
+                h.loadSource(hlsUrl);
+                h.attachMedia(el);
+                // Not a byte of media until the user actually hits play. If
+                // play was already pressed while the library loaded, honour it.
+                if (el.paused) {
+                    el.addEventListener('play', function () { h.startLoad(); }, { once: true });
+                } else {
+                    h.startLoad();
+                }
+            });
+        }
+
+        // Never autoplays: preload="none" means not a byte is fetched until the
+        // user actually hits play.
+        function buildVideo(video, nsfw) {
+            const el = document.createElement('video');
+            el.src = video.src;
+            el.controls = true;
+            el.preload = 'none';
+            el.playsInline = true;
+            if (video.poster) el.poster = video.poster;
+            el.className = 'w-full rounded-lg mb-2 bg-black' + (nsfw ? ' blur-md nsfw-img' : '');
+            if (nsfw) el.addEventListener('click', function () { el.classList.toggle('blur-md'); });
+            if (video.hls) setupHlsVideo(el, video.hls, video.src);
+            return el;
+        }
+
+        function buildEmbed(html) {
+            const box = document.createElement('div');
+            box.className = 'expando-embed mb-2';
+            box.innerHTML = html;
+            return box;
+        }
+
+        // One image: just show it. Several: a manual carousel — only the image
+        // you are looking at is ever fetched.
+        function buildImages(urls, nsfw) {
+            const wrap = document.createElement('div');
+            wrap.className = 'relative mb-2';
+
+            const img = nsfwImage(document.createElement('img'), nsfw);
+            img.alt = '';
+            img.className += ' w-full rounded-lg bg-neutral-900';
+            wrap.appendChild(img);
+
+            if (urls.length === 1) {
+                img.src = urls[0];
+                return wrap;
+            }
+
+            let i = 0;
+            const counter = document.createElement('span');
+            counter.className = 'absolute top-2 right-2 px-2 py-0.5 rounded-full bg-black/60 text-white text-[11px] font-medium pointer-events-none';
+
+            function arrow(side, path) {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.className = 'absolute top-1/2 -translate-y-1/2 ' + side +
+                    '-2 w-8 h-8 grid place-items-center rounded-full bg-black/50 text-white hover:bg-black/70 disabled:opacity-30';
+                b.innerHTML = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="' + path + '"/></svg>';
+                return b;
+            }
+
+            const prev = arrow('left', 'M15 18l-6-6 6-6');
+            const next = arrow('right', 'M9 18l6-6-6-6');
+
+            function show(n) {
+                i = Math.max(0, Math.min(n, urls.length - 1));
+                img.src = urls[i];
+                counter.textContent = (i + 1) + ' / ' + urls.length;
+                prev.disabled = i === 0;
+                next.disabled = i === urls.length - 1;
+            }
+
+            prev.addEventListener('click', function (e) { e.preventDefault(); show(i - 1); });
+            next.addEventListener('click', function (e) { e.preventDefault(); show(i + 1); });
+
+            wrap.appendChild(prev);
+            wrap.appendChild(next);
+            wrap.appendChild(counter);
+            show(0);
+            return wrap;
+        }
+
+        function setExpanded(btn, open) {
+            const card = btn.closest('article');
+            const panel = card && card.querySelector('[data-expando-panel]');
+            if (!panel) return;
+
+            if (open && panel.dataset.loaded !== '1') {
+                panel.dataset.loaded = '1';
+
+                // RSS cards: the expando IS the article, fetched on first open.
+                if (btn.dataset.fetch) {
+                    panel.innerHTML = '<p class="text-sm text-neutral-500 py-3">Loading article&hellip;</p>';
+                    fetch(btn.dataset.fetch, { headers: { 'Accept': 'text/html' } })
+                        .then(function (r) { if (!r.ok) throw new Error('failed'); return r.text(); })
+                        .then(function (html) { panel.innerHTML = html; })
+                        .catch(function () {
+                            panel.innerHTML = '<p class="text-sm text-red-300 py-3">Could not load the article.</p>';
+                        });
+                } else {
+                    let media = {};
+                    try { media = JSON.parse(btn.dataset.media || '{}'); } catch (e) {}
+                    const nsfw = btn.dataset.nsfw === '1';
+
+                    if (media.video) panel.appendChild(buildVideo(media.video, nsfw));
+                    if (media.embed) panel.appendChild(buildEmbed(media.embed));
+                    if (media.images && media.images.length) panel.appendChild(buildImages(media.images, nsfw));
+                }
+            }
+
+            panel.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.classList.toggle('text-orange-500', open);
+            const plus = btn.querySelector('[data-expando-plus]');
+            if (plus) plus.setAttribute('d', open ? 'M8 12h8' : 'M12 8v8M8 12h8');
+        }
+
+        function setExpandAll(open, scope) {
+            (scope || document).querySelectorAll('[data-expando]').forEach(function (b) {
+                setExpanded(b, open);
+            });
+        }
+
+        function expandAllIsOn() {
+            const all = document.querySelector('[data-expando-all]');
+            return !!all && all.getAttribute('aria-pressed') === 'true';
+        }
+
+        document.addEventListener('click', function (e) {
+            const all = e.target.closest('[data-expando-all]');
+            if (all) {
+                e.preventDefault();
+                const open = all.getAttribute('aria-pressed') !== 'true';
+                setExpandAll(open);
+                all.setAttribute('aria-pressed', open ? 'true' : 'false');
+                const label = all.querySelector('[data-expando-all-label]');
+                if (label) label.textContent = open ? 'Collapse all' : 'Expand all';
+                return;
+            }
+
+            const btn = e.target.closest('[data-expando]');
+            if (!btn) return;
+            e.preventDefault();
+            const opening = btn.getAttribute('aria-expanded') !== 'true';
+            setExpanded(btn, opening);
+
+            // Unfolding a post inline is reading it too — but only a direct
+            // tap; "expand all" doesn't take this path, so it never marks the
+            // whole page read. The server keeps the comment-count baseline
+            // untouched for these: you saw the content, not the thread.
+            if (opening) {
+                const card = btn.closest('[data-seen]');
+                if (card && !card.__seenReported) {
+                    card.__seenReported = true;
+                    reportSeen(card.dataset.seen);
+                    paintCardRead(card);
+                }
+            }
+        });
+
+        // ---- unfold a subreddit row into a peek at its posts (Explore) ------
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('[data-unfold]');
+            if (!btn) return;
+            e.preventDefault();
+
+            const card = btn.closest('[data-unfold-card]');
+            const panel = card && card.querySelector('[data-unfold-panel]');
+            if (!panel) return;
+
+            const open = panel.hidden;
+            panel.hidden = !open;
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            const chevron = btn.querySelector('svg');
+            if (chevron) chevron.classList.toggle('rotate-180', open);
+
+            if (!open || panel.dataset.loaded === '1') return;
+
+            panel.innerHTML = '<p class="text-xs text-neutral-500 py-1">Loading&hellip;</p>';
+            try {
+                const res = await fetch(btn.dataset.url, { headers: { 'Accept': 'text/html' } });
+                if (!res.ok) throw new Error('failed');
+                panel.innerHTML = await res.text();
+                panel.dataset.loaded = '1';
+            } catch (err) {
+                panel.innerHTML = '<p class="text-xs text-red-300 py-1">Could not load posts.</p>';
+            }
+        });
+
         // ---- append-based "load more" + infinite scroll --------------------
         let lmObserver = null;
         async function loadMore(trigger) {
@@ -310,6 +1172,8 @@
                 const incoming = doc.getElementById('post-list');
                 const list = document.getElementById('post-list');
                 if (incoming && list) { while (incoming.firstElementChild) list.appendChild(incoming.firstElementChild); }
+                // Keep "expand all" honest across appended pages.
+                if (expandAllIsOn()) setExpandAll(true, list);
                 const newLM = doc.getElementById('load-more');
                 const curLM = document.getElementById('load-more');
                 if (curLM) {
@@ -414,11 +1278,95 @@
             });
         }
 
+        // ---- reading-list reader: a paged deck of full posts ----------------
+        // Content is fetched per card as it comes into view; advancing past a
+        // card marks it read (persisted), the last card is marked on arrival
+        // since there is nowhere to advance to. Read cards stay in the deck for
+        // the session — they only drop out on the next visit.
+        function initReader() {
+            const deck = document.querySelector('[data-reader-deck]');
+            if (!deck || deck.__init) return;   // element is fresh per navigation
+            deck.__init = true;
+
+            const cards = Array.prototype.slice.call(deck.querySelectorAll('[data-reader-card]'));
+            const total = cards.length;
+            let lastActive = null;
+
+            function loadCard(card) {
+                if (!card || card.__loaded || card.__loading) return;
+                card.__loading = true;
+                fetch(card.dataset.url, { headers: { 'Accept': 'text/html' } })
+                    .then(function (r) { if (!r.ok) throw new Error('failed'); return r.text(); })
+                    .then(function (html) {
+                        const body = card.querySelector('[data-card-body]');
+                        if (body) body.innerHTML = html;
+                        card.__loaded = true;
+                    })
+                    .catch(function () {
+                        const body = card.querySelector('[data-card-body]');
+                        if (body) body.innerHTML = '<p class="text-sm text-red-300 py-8 text-center">Could not load this post.</p>';
+                    })
+                    .finally(function () { card.__loading = false; });
+            }
+
+            function markRead(card) {
+                if (!card || card.__read) return;
+                card.__read = true;
+                const chip = card.querySelector('[data-card-read-chip]');
+                if (chip) chip.hidden = false;
+                fetch(card.dataset.markUrl, { method: 'POST', headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (state) { if (typeof updateDock === 'function') updateDock(state); })
+                    .catch(function () {});
+            }
+
+            function setActive(idx) {
+                const pos = document.querySelector('[data-reader-position]');
+                if (pos) pos.textContent = idx + 1;
+                const prog = document.querySelector('[data-reader-progress]');
+                if (prog) prog.style.width = ((idx + 1) / total * 100) + '%';
+
+                loadCard(cards[idx]);
+                loadCard(cards[idx + 1]);   // prefetch the next so the swipe feels instant
+
+                // You've moved on from the previous card, so it's read.
+                if (lastActive !== null && lastActive !== idx) markRead(cards[lastActive]);
+                lastActive = idx;
+
+                // The last card is terminal — nothing to advance to, so arriving
+                // is finishing it.
+                if (cards[idx] && cards[idx].dataset.last === '1') markRead(cards[idx]);
+            }
+
+            const io = new IntersectionObserver(function (entries) {
+                entries.forEach(function (e) {
+                    if (e.isIntersecting && e.intersectionRatio >= 0.6) {
+                        setActive(Number(e.target.dataset.index));
+                    }
+                });
+            }, { root: deck, threshold: [0.6] });
+            cards.forEach(function (c) { io.observe(c); });
+
+            setActive(0);
+
+            deck.addEventListener('click', function (e) {
+                const btn = e.target.closest('[data-reader-next]');
+                if (!btn) return;
+                const card = btn.closest('[data-reader-card]');
+                const next = cards[Number(card.dataset.index) + 1];
+                if (next) next.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+            });
+        }
+
         function initPage() {
             document.querySelectorAll('input[data-sub-autocomplete]').forEach(initAutocomplete);
             observeLoadMore();
+            initReader();
             updateTabs();
             showFlash();
+            document.querySelectorAll('video[data-video-hls]').forEach(function (v) {
+                setupHlsVideo(v, v.dataset.videoHls, v.dataset.videoFallback);
+            });
         }
 
         // Strip body-appended helpers (dropdowns, toasts) before Turbo caches a
@@ -436,5 +1384,6 @@
         }
     })();
     </script>
+
 </body>
 </html>

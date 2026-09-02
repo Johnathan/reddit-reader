@@ -10,7 +10,35 @@ use Illuminate\View\View;
 
 class SubredditController extends Controller
 {
+    /** How many posts the Explore unfold shows. */
+    private const PREVIEW_POSTS = 3;
+
     public function __construct(protected Reddit $reddit) {}
+
+    /**
+     * A peek at a subreddit's first few posts, rendered as a bare HTML
+     * fragment for the unfold on Explore. Fetched on demand — unfolding 25
+     * rows up front would be 25 Reddit calls nobody asked for.
+     */
+    public function preview(string $subreddit): View
+    {
+        $subreddit = strtolower($subreddit);
+        $error = null;
+        $posts = [];
+
+        try {
+            $listing = $this->reddit->listing($subreddit, 'hot', ['limit' => self::PREVIEW_POSTS]);
+            $posts = array_slice($listing['data']['children'] ?? [], 0, self::PREVIEW_POSTS);
+        } catch (RedditException $e) {
+            $error = $e->getMessage();
+        }
+
+        return view('partials.sub-preview', [
+            'subreddit' => $subreddit,
+            'posts' => $posts,
+            'error' => $error,
+        ]);
+    }
 
     /**
      * Show a single subreddit's listing with sort/pagination and a
@@ -19,7 +47,21 @@ class SubredditController extends Controller
     public function show(Request $request, string $subreddit): View
     {
         $subreddit = strtolower($subreddit);
-        $sort = $request->string('sort', 'hot')->toString();
+
+        // Each sub remembers how you last sorted it. An explicit ?sort= (a tap
+        // on the switcher) updates the memory; arriving without one (from the
+        // feed, sidebar, a link) restores it.
+        $sessionKey = 'sub-sort.'.$subreddit;
+
+        if ($request->query('sort') !== null) {
+            $sort = $request->string('sort')->toString();
+            $t = $request->query('t');
+            $request->session()->put($sessionKey, ['sort' => $sort, 't' => $t]);
+        } else {
+            $remembered = $request->session()->get($sessionKey, []);
+            $sort = $remembered['sort'] ?? 'hot';
+            $t = $remembered['t'] ?? null;
+        }
 
         $error = null;
         $posts = [];
@@ -29,7 +71,7 @@ class SubredditController extends Controller
         try {
             $listing = $this->reddit->listing($subreddit, $sort, [
                 'after' => $request->query('after'),
-                't' => $request->query('t'),
+                't' => $t,
             ]);
 
             $posts = $listing['data']['children'] ?? [];
@@ -59,6 +101,7 @@ class SubredditController extends Controller
             'subreddit' => $subreddit,
             'posts' => $posts,
             'sort' => $sort,
+            't' => $t,
             'after' => $after,
             'error' => $error,
             'isSubscribed' => $isSubscribed,

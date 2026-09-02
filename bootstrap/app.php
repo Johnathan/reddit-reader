@@ -18,7 +18,16 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Deliberately narrow: normal form posts should redirect back with
+        // their errors, not get JSON. The reading-list endpoints are the
+        // exception — they are only ever called by fetch(), so a validation
+        // failure must come back as 422 JSON rather than a 302 to a page the
+        // caller cannot use.
+        // ...but not the GET, which is a normal page and should still redirect
+        // a logged-out visitor to the login screen.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*'),
+            fn (Request $request) => $request->is('api/*')
+                || ($request->is('reading-list', 'reading-list/*') && ! $request->isMethod('GET'))
+                || ($request->is('saved', 'saved/*') && ! $request->isMethod('GET') && ! $request->is('saved/folders*')),
         );
     })->create();

@@ -2,8 +2,10 @@
 
 @section('subnav-title', 'home')
 
+@section('title', 'Home · reader')
+
 @section('content')
-    @if (empty($subreddits))
+    @if (empty($posts) && empty($subreddits) && ! $error)
         <div class="text-center py-16">
             <p class="text-neutral-400 mb-4">You haven&rsquo;t subscribed to any subreddits yet.</p>
             <div class="flex items-center justify-center gap-2">
@@ -16,13 +18,15 @@
             </div>
         </div>
     @else
+        @include('partials.source-toggles', ['disabledSources' => $disabledSources])
+
         @include('partials.sort-switcher', ['routeName' => 'home', 'routeParams' => [], 'sort' => $sort])
 
         @include('partials.feed-list', [
             'posts' => $posts,
             'error' => $error,
             'hideSubreddit' => false,
-            'loadMoreUrl' => $after ? route('home', array_filter(['sort' => $sort, 'after' => $after, 't' => request('t')])) : null,
+            'loadMoreUrl' => $loadMoreUrl,
         ])
     @endif
 @endsection

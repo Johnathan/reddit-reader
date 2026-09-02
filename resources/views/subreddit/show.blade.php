@@ -2,6 +2,8 @@
 
 @section('subnav-title', 'r/'.$subreddit)
 
+@section('title', 'r/'.$subreddit.' · reader')
+
 @section('content')
     <div class="flex items-center justify-between mb-3 gap-2">
         <h1 class="text-lg font-semibold truncate">r/{{ $subreddit }}</h1>
@@ -37,12 +39,12 @@
         </details>
     @endif
 
-    @include('partials.sort-switcher', ['routeName' => 'subreddit.show', 'routeParams' => ['subreddit' => $subreddit], 'sort' => $sort])
+    @include('partials.sort-switcher', ['routeName' => 'subreddit.show', 'routeParams' => ['subreddit' => $subreddit], 'sort' => $sort, 'currentT' => $t])
 
     @include('partials.feed-list', [
         'posts' => $posts,
         'error' => $error,
         'hideSubreddit' => true,
-        'loadMoreUrl' => $after ? route('subreddit.show', array_filter(['subreddit' => $subreddit, 'sort' => $sort, 'after' => $after, 't' => request('t')])) : null,
+        'loadMoreUrl' => $after ? route('subreddit.show', array_filter(['subreddit' => $subreddit, 'sort' => $sort, 'after' => $after, 't' => $t])) : null,
     ])
 @endsection

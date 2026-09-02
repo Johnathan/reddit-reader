@@ -2,18 +2,19 @@
 
 namespace App\Http\Controllers;
 
-use App\Exceptions\RedditException;
 use App\Models\Subscription;
-use App\Services\Reddit;
+use App\Services\FeedMerger;
 use Illuminate\Http\Request;
 use Illuminate\View\View;
 
 class HomeController extends Controller
 {
-    public function __construct(protected Reddit $reddit) {}
+    public function __construct(protected FeedMerger $merger) {}
 
     /**
-     * Combined home feed of every subreddit the current user subscribes to.
+     * The unified home timeline: subscribed subreddits + Hacker News + every
+     * configured RSS source, merged into one feed. Per-source cursors travel
+     * in the load-more URL as c[source].
      */
     public function index(Request $request): View
     {
@@ -25,38 +26,36 @@ class HomeController extends Controller
             ->pluck('subreddit')
             ->all();
 
-        if (empty($subreddits)) {
-            return view('home', [
-                'subreddits' => [],
-                'posts' => [],
+        $cursors = collect((array) $request->query('c', []))
+            ->map(fn ($v) => (string) $v)
+            ->all();
+
+        $disabledSources = $request->user()->disabledSources();
+
+        $page = $this->merger->page(
+            $subreddits,
+            $sort,
+            $request->query('t'),
+            $cursors,
+            firstPage: $cursors === [],
+            disabledSources: $disabledSources,
+        );
+
+        $loadMoreUrl = FeedMerger::hasMore($page['cursors'])
+            ? route('home', array_filter([
                 'sort' => $sort,
-                'after' => null,
-                'error' => null,
-            ]);
-        }
-
-        $error = null;
-        $posts = [];
-        $after = null;
-
-        try {
-            $listing = $this->reddit->homeListing($subreddits, $sort, [
-                'after' => $request->query('after'),
                 't' => $request->query('t'),
-            ]);
-
-            $posts = $listing['data']['children'] ?? [];
-            $after = $listing['data']['after'] ?? null;
-        } catch (RedditException $e) {
-            $error = $e->getMessage();
-        }
+                'c' => $page['cursors'],
+            ]))
+            : null;
 
         return view('home', [
             'subreddits' => $subreddits,
-            'posts' => $posts,
+            'posts' => $page['posts'],
             'sort' => $sort,
-            'after' => $after,
-            'error' => $error,
+            'error' => $page['errors'][0] ?? null,
+            'loadMoreUrl' => $loadMoreUrl,
+            'disabledSources' => $disabledSources,
         ]);
     }
 }

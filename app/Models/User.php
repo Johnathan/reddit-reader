@@ -37,6 +37,75 @@ class User extends Authenticatable implements HasPasskeys
     }
 
     /**
+     * @return HasMany<ReadingListItem, $this>
+     */
+    public function readingList(): HasMany
+    {
+        return $this->hasMany(ReadingListItem::class);
+    }
+
+    /**
+     * The archive — permanently kept posts and comments.
+     *
+     * @return HasMany<SavedItem, $this>
+     */
+    public function savedItems(): HasMany
+    {
+        return $this->hasMany(SavedItem::class);
+    }
+
+    /**
+     * @return HasMany<Folder, $this>
+     */
+    public function folders(): HasMany
+    {
+        return $this->hasMany(Folder::class);
+    }
+
+    /**
+     * @return HasMany<Tag, $this>
+     */
+    public function tags(): HasMany
+    {
+        return $this->hasMany(Tag::class);
+    }
+
+    /**
+     * Home-timeline sources ('reddit', 'hn', 'news') this user has switched
+     * off. Null column = nothing disabled.
+     *
+     * @return array<int, string>
+     */
+    public function disabledSources(): array
+    {
+        return $this->disabled_sources ?? [];
+    }
+
+    /**
+     * Read-tracking rows: what's been opened, and at what comment count.
+     *
+     * @return HasMany<SeenItem, $this>
+     */
+    public function seenItems(): HasMany
+    {
+        return $this->hasMany(SeenItem::class);
+    }
+
+    /**
+     * Record that this user has opened an item. A null $comments (an inline
+     * expando, an RSS article) marks it read WITHOUT touching the stored
+     * comment count — the "+N new" baseline only moves when the user actually
+     * sees the thread.
+     */
+    public function markSeen(string $key, ?int $comments = null): void
+    {
+        $this->seenItems()->updateOrCreate(
+            ['seen_key' => $key],
+            ['last_seen_at' => now()] + ($comments !== null ? ['comments_seen' => $comments] : []),
+        );
+    }
+
+    /**
      * Get the attributes that should be cast.
      *
      * @return array<string, string>
@@ -46,6 +115,7 @@ class User extends Authenticatable implements HasPasskeys
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'disabled_sources' => 'array',
         ];
     }
 }

@@ -2,6 +2,8 @@
 
 @section('subnav-title', 'explore')
 
+@section('title', 'Explore · reader')
+
 @section('content')
     <form method="GET" action="{{ route('subs.index') }}" class="mb-5 flex gap-2">
         <input type="text" name="q" placeholder="Search subreddits&hellip;" data-sub-autocomplete="navigate"

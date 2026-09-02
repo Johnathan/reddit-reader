@@ -35,12 +35,18 @@ class PostController extends Controller
 
             if ($post === null) {
                 $error = 'That post could not be found.';
+            } elseif ($request->user()) {
+                // Opening the post IS reading it — record it server-side so
+                // every device's feed dims it and baselines its "+N new".
+                $request->user()->markSeen('reddit:'.$post['id'], $post['num_comments'] ?? null);
             }
         } catch (RedditException $e) {
             $error = $e->getMessage();
         }
 
-        return view('posts.show', [
+        // Guests (shared links) get a read-only page with none of the app
+        // shell — no sidebar, dock, or actions, so nothing personal renders.
+        return view($request->user() ? 'posts.show' : 'posts.public', [
             'subreddit' => $subreddit,
             'post' => $post,
             'comments' => $comments,

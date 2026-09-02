@@ -2,6 +2,8 @@
 
 @section('subnav-title', 'feeds')
 
+@section('title', 'Feeds · reader')
+
 @section('content')
     <form method="POST" action="{{ route('feeds.store') }}" class="mb-6 flex gap-2">
         @csrf

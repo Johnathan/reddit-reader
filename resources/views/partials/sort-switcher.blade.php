@@ -1,6 +1,8 @@
 @php
     $sorts = ['hot' => 'Hot', 'new' => 'New', 'top' => 'Top', 'rising' => 'Rising'];
-    $currentT = request('t', 'day');
+    // A page restoring a remembered sort passes currentT explicitly — the
+    // query string is empty on those visits.
+    $currentT = ($currentT ?? null) ?: request('t', 'day');
 @endphp
 
 <div class="flex items-center gap-1.5 text-sm mb-3 overflow-x-auto pb-1">

@@ -223,16 +223,10 @@ class Reddit
     /**
      * Solve Reddit's logged-out JS challenge and bank the resulting cookies.
      *
-     * The interstitial ships a one-line script of the shape
-     *
-     *     await (async e => e + e)("<hex seed>")
-     *
-     * i.e. "the answer is the seed concatenated with itself" — a proof you can
-     * run JS, not a real crypto puzzle. It then GETs the form back with that
-     * solution plus the page's token, and Reddit sets the clearance cookies
-     * that make the .json endpoints work. We do the same thing without a
-     * browser. If Reddit ever changes the puzzle shape, the seed regex stops
-     * matching and we throw rather than silently looping.
+     * The interstitial ships a one-line script that computes a solution, drops
+     * it into a hidden form, and submits it. Reddit answers with the clearance
+     * cookies that make the .json endpoints work. We do the same without a
+     * browser: read the puzzle, read the form, submit it.
      */
     protected function solveChallenge(): void
     {
@@ -251,26 +245,10 @@ class Reddit
                 return; // No challenge in the way; whatever 403'd was not this.
             }
 
-            // (async e => e + e)("<seed>")  ->  solution is seed.seed
-            if (! preg_match('/\(\s*async\s+(\w+)\s*=>\s*\1\s*\+\s*\1\s*\)\s*\(\s*"([0-9a-f]+)"\s*\)/i', $body, $m)) {
-                throw RedditException::challengeChanged();
-            }
-
-            $seed = $m[2];
-
-            if (! preg_match('/name="token"\s+value="([^"]+)"/', $body, $t)) {
-                throw RedditException::challengeChanged();
-            }
-
             $solved = Http::withHeaders($headers)
                 ->withOptions(['cookies' => $jar])
                 ->timeout(12)
-                ->get(self::BASE_URL.'/', [
-                    'solution' => $seed.$seed,
-                    'js_challenge' => 1,
-                    'token' => $t[1],
-                    'jsc_orig_r' => '',
-                ]);
+                ->get(self::BASE_URL.'/', $this->challengeParams($body));
 
             if ($solved->failed()) {
                 throw RedditException::challengeFailed();
@@ -278,6 +256,71 @@ class Reddit
         } catch (ConnectionException $e) {
             throw RedditException::timedOut();
         }
+    }
+
+    /**
+     * Rebuild the query the challenge form would have submitted.
+     *
+     * We echo back every hidden input the form carries (token, js_challenge,
+     * jsc_orig_r, …) rather than naming them one by one, so Reddit adding or
+     * renaming a field doesn't break us — only a change to the puzzle itself
+     * does, and that fails loudly.
+     *
+     * @return array<string, string>
+     */
+    protected function challengeParams(string $body): array
+    {
+        // Only the challenge form's own inputs, if we can isolate it.
+        $scope = preg_match('/<form\b[^>]*>(.*?)<\/form>/is', $body, $f) ? $f[1] : $body;
+
+        $params = [];
+
+        if (preg_match_all('/<input\b[^>]*>/i', $scope, $inputs)) {
+            foreach ($inputs[0] as $tag) {
+                if (! preg_match('/\bname="([^"]*)"/i', $tag, $n)) {
+                    continue;
+                }
+                $params[$n[1]] = preg_match('/\bvalue="([^"]*)"/i', $tag, $v)
+                    ? html_entity_decode($v[1])
+                    : '';
+            }
+        }
+
+        if ($params === []) {
+            throw RedditException::challengeChanged();
+        }
+
+        // The form's onsubmit appends the pairs in this string as extra hidden
+        // inputs before submitting. It is usually empty — but honour it if not.
+        if (preg_match('/new\s+URLSearchParams\(\s*"([^"]*)"\s*\)/', $body, $extra) && $extra[1] !== '') {
+            parse_str(html_entity_decode($extra[1]), $parsed);
+            $params = array_merge($params, array_map('strval', $parsed));
+        }
+
+        $params['solution'] = $this->challengeSolution($body);
+
+        return $params;
+    }
+
+    /**
+     * Compute the puzzle's answer.
+     *
+     * The script is of the shape `(async e => e + e)("<seed>")` — "the answer
+     * is the seed concatenated with itself", a proof you can run JS rather than
+     * a real crypto puzzle. The seed's alphabet is Reddit's business: it was
+     * lowercase hex, and is now base64 (`4C19qvYRXZbyHnM=`), which is exactly
+     * what broke this. So accept any seed, and only throw if the puzzle stops
+     * being "double it" — a real change we cannot answer by guessing.
+     */
+    protected function challengeSolution(string $body): string
+    {
+        $puzzle = '/\(\s*async\s*\(?\s*(\w+)\s*\)?\s*=>\s*\1\s*\+\s*\1\s*\)\s*\(\s*"([^"]*)"\s*\)/i';
+
+        if (! preg_match($puzzle, $body, $m) || $m[2] === '') {
+            throw RedditException::challengeChanged();
+        }
+
+        return $m[2].$m[2];
     }
 
     /**
@@ -415,6 +458,145 @@ class Reddit
         }
 
         return round($n / 1_000_000, 1).'m';
+    }
+
+    /**
+     * Full-size image URLs a feed card can expand inline, RES-style.
+     *
+     * Galleries return every image; a direct image link returns itself; any
+     * other post with a preview returns that preview's source. Text posts and
+     * link posts with no preview return an empty array — meaning "no expando".
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     * @return array<int, string>
+     */
+    public static function expandableImages(array $post): array
+    {
+        if (($post['is_gallery'] ?? false) && ! empty($post['gallery_data']['items']) && ! empty($post['media_metadata'])) {
+            $images = [];
+
+            foreach ($post['gallery_data']['items'] as $item) {
+                $meta = $post['media_metadata'][$item['media_id'] ?? ''] ?? null;
+                $url = $meta['s']['u'] ?? $meta['s']['gif'] ?? null;
+
+                if ($url) {
+                    $images[] = html_entity_decode($url);
+                }
+            }
+
+            return $images;
+        }
+
+        $url = ! empty($post['url']) ? html_entity_decode($post['url']) : null;
+        $path = $url ? (string) parse_url($url, PHP_URL_PATH) : '';
+
+        if ($url && preg_match('/\.(jpe?g|png|gif|webp)$/i', $path)) {
+            return [$url];
+        }
+
+        $source = $post['preview']['images'][0]['source']['url'] ?? null;
+
+        return $source ? [html_entity_decode($source)] : [];
+    }
+
+    /**
+     * A text post's body, sanitized and ready to render inside an expando.
+     * Empty string for link posts and for self posts with no body.
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     */
+    public static function expandableText(array $post): string
+    {
+        return self::sanitizeHtml($post['selftext_html'] ?? null);
+    }
+
+    /**
+     * A Reddit-hosted video, with a poster frame. The player is built only
+     * when the card unfolds and never autoplays.
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     * @return array{src: string, poster: ?string}|null
+     */
+    public static function expandableVideo(array $post): ?array
+    {
+        $rv = $post['media']['reddit_video']
+            ?? $post['preview']['reddit_video_preview']
+            ?? null;
+
+        if (! $rv || empty($rv['fallback_url'])) {
+            return null;
+        }
+
+        $poster = $post['preview']['images'][0]['source']['url'] ?? null;
+
+        return [
+            'src' => html_entity_decode($rv['fallback_url']),
+            // The fallback mp4 is the DASH video track alone — Reddit ships
+            // audio separately, which is why it plays silent. The HLS playlist
+            // muxes both, so any player that can use it gets sound.
+            'hls' => ! empty($rv['hls_url']) ? html_entity_decode($rv['hls_url']) : null,
+            'poster' => $poster ? html_entity_decode($poster) : null,
+        ];
+    }
+
+    /**
+     * Third-party embed markup (YouTube, Vimeo, …) as Reddit's oEmbed gives
+     * it, minus scripts. Injected only on unfold — a hidden <iframe> still
+     * loads, so rendering these up front would phone home to YouTube for
+     * every card in the feed whether or not you opened it.
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     */
+    public static function expandableEmbed(array $post): string
+    {
+        $html = $post['secure_media']['oembed']['html']
+            ?? $post['media']['oembed']['html']
+            ?? null;
+
+        return self::sanitizeHtml($html ? html_entity_decode($html) : null);
+    }
+
+    /**
+     * Everything a feed card can unfold, resolved to one shape so the card and
+     * the "expand all" control can never disagree about what is expandable.
+     *
+     * Video and embeds win over stills: a video post's preview image is just a
+     * poster frame, so showing both would be showing the same thing twice.
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     * @return array{text: string, video: ?array{src: string, poster: ?string}, embed: string, images: array<int, string>}
+     */
+    public static function expando(array $post): array
+    {
+        $video = self::expandableVideo($post);
+        $embed = $video ? '' : self::expandableEmbed($post);
+        $images = ($video || $embed !== '') ? [] : self::expandableImages($post);
+
+        if ($video) {
+            $video['src'] = ImageProxy::wrap($video['src']);
+            $video['hls'] = ImageProxy::wrap($video['hls']);
+            $video['poster'] = ImageProxy::wrap($video['poster']);
+        }
+
+        return [
+            'text' => self::expandableText($post),
+            'video' => $video,
+            'embed' => $embed,
+            // Imgur is geo-blocked in the UK; route those through the server.
+            'images' => ImageProxy::wrapAll($images),
+        ];
+    }
+
+    /**
+     * Does this post have anything worth unfolding in the feed?
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     */
+    public static function isExpandable(array $post): bool
+    {
+        $e = self::expando($post);
+
+        return $e['text'] !== '' || $e['video'] !== null || $e['embed'] !== '' || $e['images'] !== [];
     }
 
     /**

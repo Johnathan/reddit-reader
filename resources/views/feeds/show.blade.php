@@ -2,6 +2,8 @@
 
 @section('subnav-title', $feed->name)
 
+@section('title', $feed->name.' · reader')
+
 @section('content')
     <div class="flex items-center justify-between mb-3 gap-2">
         <h1 class="text-lg font-semibold truncate">{{ $feed->name }}</h1>

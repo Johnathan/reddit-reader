@@ -28,6 +28,11 @@ abstract class TestCase extends BaseTestCase
             {
                 return null;
             }
+
+            public function feedCommentCount(string $id): ?int
+            {
+                return null;
+            }
         });
 
         $this->instance(RssSource::class, new class extends RssSource

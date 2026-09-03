@@ -51,7 +51,18 @@
                         <h2 class="font-semibold leading-snug mb-3">{{ $item->title }}</h2>
 
                         <div data-card-body>
-                            <div data-card-loading class="py-12 text-center text-neutral-500 text-sm">Loading&hellip;</div>
+                            {{-- Skeleton in the shape of a post + comments, so
+                                 the card doesn't jump when content lands. --}}
+                            <div data-card-loading class="py-2 space-y-2.5" role="status" aria-label="Loading">
+                                <div class="skeleton h-40 w-full"></div>
+                                <div class="skeleton h-3.5 w-full"></div>
+                                <div class="skeleton h-3.5 w-5/6"></div>
+                                <div class="skeleton h-3.5 w-2/3"></div>
+                                <div class="h-2"></div>
+                                <div class="skeleton h-3.5 w-1/3"></div>
+                                <div class="skeleton h-3.5 w-full"></div>
+                                <div class="skeleton h-3.5 w-4/6"></div>
+                            </div>
                         </div>
 
                         <div class="py-10 text-center">

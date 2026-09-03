@@ -160,6 +160,30 @@ class HackerNews
         ]];
     }
 
+    /**
+     * The story's official total comment count — `descendants` in the HN
+     * Firebase API, which is the same number Algolia serves the feed cards
+     * as num_comments. The thread page's tree walk counts what the tree
+     * endpoint happens to return (dead/flagged nodes differ), so recording
+     * THAT as "seen" left cards showing phantom "+N new" — or hiding real
+     * ones — forever. Null when the lookup fails; callers fall back.
+     */
+    public function feedCommentCount(string $id): ?int
+    {
+        return Cache::remember('hn:count:'.$id, 300, function () use ($id) {
+            try {
+                $response = Http::timeout(8)->connectTimeout(4)
+                    ->get('https://hacker-news.firebaseio.com/v0/item/'.$id.'.json');
+            } catch (ConnectionException $e) {
+                return null;
+            }
+
+            $n = $response->successful() ? $response->json('descendants') : null;
+
+            return is_numeric($n) ? (int) $n : null;
+        });
+    }
+
     /** @param array<string, mixed> $item */
     protected function countComments(array $item): int
     {

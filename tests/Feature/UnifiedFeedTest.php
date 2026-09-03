@@ -249,6 +249,11 @@ class UnifiedFeedTest extends TestCase
                     ]]],
                 ];
             }
+
+            public function feedCommentCount(string $id): ?int
+            {
+                return null;   // no network in tests
+            }
         });
 
         $res = $this->actingAs(User::factory()->create())->get('/hn/1');

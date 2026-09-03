@@ -28,8 +28,12 @@ class HackerNewsController extends Controller
                 $error = 'That item could not be found on Hacker News.';
             } elseif (($thread['item']['type'] ?? 'story') !== 'comment') {
                 // Stories only: a drilled-into comment permalink has its own
-                // id, which is not what the feed card is keyed by.
-                $request->user()->markSeen('hn:'.$thread['item']['id'], $thread['item']['num_comments'] ?? null);
+                // id, which is not what the feed card is keyed by. The seen
+                // count must be on the FEED's scale (Algolia/descendants),
+                // not this page's tree walk — see feedCommentCount.
+                $count = $this->hackerNews->feedCommentCount((string) $thread['item']['id'])
+                    ?? $thread['item']['num_comments'] ?? null;
+                $request->user()->markSeen('hn:'.$thread['item']['id'], $count);
             }
         } catch (RedditException $e) {
             $error = $e->getMessage();

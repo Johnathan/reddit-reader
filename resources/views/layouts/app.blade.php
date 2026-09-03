@@ -21,25 +21,7 @@
     <meta name="apple-mobile-web-app-title" content="Reddit Reader">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Warm "paper" theme — remap Tailwind's neutral/orange palettes so the
-        // dark-authored utility classes render as a light cream/navy/amber scheme.
-        const paper = {
-            100: '#1e2740', 200: '#293251', 300: '#46506b', 400: '#6a6250',
-            500: '#7c705a', 600: '#9a8c70', 700: '#cbbb98', 800: '#e5dcc7',
-            900: '#fbf8f1', 950: '#efe7d6',
-        };
-        tailwind.config = {
-            theme: { extend: { colors: {
-                neutral: paper,
-                zinc: paper,
-                orange: { 300: '#b8843a', 400: '#a8722a', 500: '#93611c', 600: '#7d5115' },
-                emerald: { 200: '#065f46', 300: '#047857', 400: '#059669', 700: '#34d399', 900: '#d1fae5', 950: '#ecfdf5' },
-                green:   { 200: '#14532d', 700: '#4ade80', 900: '#dcfce7' },
-                red:     { 200: '#7f1d1d', 300: '#991b1b', 400: '#b91c1c', 700: '#f87171', 900: '#fee2e2', 950: '#fef2f2' },
-            } } },
-        };
-    </script>
+    @include('partials.theme-config')
     <script src="https://cdn.jsdelivr.net/npm/@hotwired/turbo@8.0.23/dist/turbo.es2017-umd.min.js"></script>
     <style>
         :root { --topbar-h: 3rem; --tabbar-h: 3.5rem; --sidebar-w: 15rem; --shell-gap: 1.5rem; --shell-max: 42rem; }
@@ -98,7 +80,7 @@
             select { font-size: 16px !important; }
         }
 
-        .turbo-progress-bar { height: 3px; background: #93611c; }
+        .turbo-progress-bar { height: 3px; background: #8f5d1a; }
 
         /* Native push/pop: the content slides directionally, the fixed top and
            tab bars are lifted into their own view-transition groups so they
@@ -135,7 +117,7 @@
             html[data-turbo-visit-direction="back"]::view-transition-new(root) { animation-name: vt-fade-in; }
         }
 
-        .reddit-html a { color: #93611c; text-decoration: underline; text-underline-offset: 2px; }
+        .reddit-html a { color: #8f5d1a; text-decoration: underline; text-underline-offset: 2px; }
         .reddit-html p { margin: 0.5em 0; }
         .reddit-html blockquote { border-left: 3px solid #cbbb98; padding-left: 0.75em; margin: 0.5em 0; color: #6a6250; }
         .reddit-html pre { background: #f3ecda; padding: 0.5em; border-radius: 0.5em; overflow-x: auto; }
@@ -148,10 +130,23 @@
         .reddit-html th, .reddit-html td { border: 1px solid #d9ccb2; padding: 0.3em 0.6em; }
         .nsfw-img { transition: filter 0.15s ease; cursor: pointer; }
 
+        /* Loading skeletons: the shape of the content instead of "Loading…",
+           so nothing jumps when the real thing arrives. Shimmer only when
+           motion is welcome. */
+        .skeleton { position: relative; overflow: hidden; border-radius: 0.5rem; background: #e5dcc7; }
+        @media (prefers-reduced-motion: no-preference) {
+            .skeleton::after {
+                content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+                background: linear-gradient(90deg, transparent, rgba(251,248,241,.7), transparent);
+                animation: skeleton-sweep 1.4s infinite;
+            }
+            @keyframes skeleton-sweep { to { transform: translateX(100%); } }
+        }
+
         /* Posts you've already opened: the title quiets down, visited-link
            style, so the unread ones stand out when scanning the feed. */
-        [data-mark-read].post-read { color: #8a7f68; font-weight: 400; }
-        [data-mark-read].post-read:hover { color: #93611c; }
+        [data-mark-read].post-read { color: #857758; font-weight: 400; }
+        [data-mark-read].post-read:hover { color: #8f5d1a; }
 
         /* Small icon buttons get a finger-sized hit area without changing the
            layout: the pseudo-element overflows the button invisibly. Apple asks
@@ -701,6 +696,107 @@
             }
         });
 
+        // ---- skeleton markup for lazy-loaded panels -------------------------
+        window.skeletonHTML = function (lines) {
+            const widths = ['w-3/4', 'w-full', 'w-full', 'w-5/6', 'w-2/3', 'w-full', 'w-4/6'];
+            let html = '<div class="py-2 space-y-2.5" role="status" aria-label="Loading">';
+            for (let i = 0; i < lines; i++) {
+                html += '<div class="skeleton h-3.5 ' + widths[i % widths.length] + '"></div>';
+            }
+            return html + '</div>';
+        };
+
+        // ---- the whole card opens the post ----------------------------------
+        // Only the title, thumbnail and comment count were links; taps on the
+        // summary, the meta row or plain whitespace did nothing — the most
+        // missed tap in the app. Real links and buttons keep their own jobs,
+        // selections never navigate, and neither does an opened expando.
+        let suppressCardClickUntil = 0;   // set by the swipe engine on release
+        document.addEventListener('click', function (e) {
+            const card = e.target.closest('[data-card-link]');
+            if (!card) return;
+            if (Date.now() < suppressCardClickUntil) return;
+            if (e.target.closest('a, button, summary, details, video, iframe, input, [data-expando-panel]')) return;
+            const sel = window.getSelection && window.getSelection();
+            if (sel && sel.toString()) return;
+            const title = card.querySelector('a[data-mark-read]');
+            if (title) {
+                title.click();   // same path as a title tap: dims + navigates
+            } else if (window.Turbo) {
+                Turbo.visit(card.dataset.cardLink);
+            } else {
+                location.assign(card.dataset.cardLink);
+            }
+        });
+
+        // ---- pull-to-refresh -------------------------------------------------
+        // Installed as a PWA there is no address bar and no native gesture;
+        // listings cache for ~90s, so "am I current?" genuinely needs this.
+        (function () {
+            if (!('ontouchstart' in window)) return;
+
+            const THRESHOLD = 70;
+            let bar = null;
+            let pull = null;
+
+            function indicator() {
+                if (bar && bar.isConnected) return bar;
+                bar = document.createElement('div');
+                bar.setAttribute('aria-hidden', 'true');
+                bar.className = 'fixed z-30 w-9 h-9 grid place-items-center rounded-full bg-neutral-900 border border-neutral-700 shadow-lg text-orange-500';
+                bar.style.left = 'calc(50% - 1.125rem)';
+                bar.style.top = 'calc(var(--topbar-h) + env(safe-area-inset-top) + 10px)';
+                bar.style.opacity = '0';
+                bar.style.pointerEvents = 'none';
+                bar.innerHTML = '<svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>';
+                document.body.appendChild(bar);
+                return bar;
+            }
+
+            function paint(dy) {
+                const el = indicator();
+                const p = Math.min(1, dy / THRESHOLD);
+                el.style.opacity = p;
+                el.style.transform = 'rotate(' + Math.round(p * 270) + 'deg)';
+                el.dataset.ready = p >= 1 ? '1' : '0';
+            }
+
+            document.addEventListener('touchstart', function (e) {
+                if (e.touches.length !== 1 || window.scrollY > 0
+                    || e.target.closest('.reader-deck, [data-dock-panel], input, textarea, [data-modal]')) {
+                    pull = null;
+                    return;
+                }
+                pull = { y0: e.touches[0].clientY, x0: e.touches[0].clientX, active: false };
+            }, { passive: true });
+
+            document.addEventListener('touchmove', function (e) {
+                if (!pull) return;
+                const dy = e.touches[0].clientY - pull.y0;
+                const dx = e.touches[0].clientX - pull.x0;
+                if (window.scrollY > 0 || dy <= 0 || Math.abs(dx) > Math.abs(dy)) {
+                    if (pull.active) paint(0);
+                    pull.active = false;
+                    return;
+                }
+                if (dy > 14) pull.active = true;
+                if (pull.active) paint(dy);
+            }, { passive: true });
+
+            document.addEventListener('touchend', function () {
+                if (pull && pull.active && bar && bar.dataset.ready === '1') {
+                    bar.style.opacity = '1';
+                    bar.style.transform = '';
+                    if (motionOK) bar.classList.add('animate-spin');
+                    if (window.Turbo) Turbo.visit(location.href, { action: 'replace' });
+                    else location.reload();
+                } else if (bar) {
+                    paint(0);
+                }
+                pull = null;
+            }, { passive: true });
+        })();
+
         // ---- re-tapping the active tab scrolls to the top -------------------
         // After a few hundred cards of infinite scroll there was no way back
         // up; this is the platform-native gesture for it.
@@ -936,6 +1032,9 @@
             const past = sw.raw >= swipeCommitDistance(card);
             const flung = velocity >= FLING_VELOCITY && sw.raw >= FLING_MIN;
 
+            // The tap synthesized after this touch must not open the post.
+            suppressCardClickUntil = Date.now() + 400;
+
             if (past || flung) {
                 // Fire on release, not after the settle animation — waiting for
                 // the card to slide home first makes the action feel laggy.
@@ -1162,7 +1261,7 @@
                 // would show the error forever instead of retrying.
                 if (btn.dataset.fetch && panel.dataset.loading !== '1') {
                     panel.dataset.loading = '1';
-                    panel.innerHTML = '<p class="text-sm text-neutral-500 py-3">Loading article&hellip;</p>';
+                    panel.innerHTML = skeletonHTML(6);
                     fetch(btn.dataset.fetch, { headers: { 'Accept': 'text/html' } })
                         .then(function (r) { if (!r.ok) throw new Error('failed'); return r.text(); })
                         .then(function (html) { panel.innerHTML = html; panel.dataset.loaded = '1'; })
@@ -1255,7 +1354,7 @@
 
             if (!open || panel.dataset.loaded === '1') return;
 
-            panel.innerHTML = '<p class="text-xs text-neutral-500 py-1">Loading&hellip;</p>';
+            panel.innerHTML = skeletonHTML(3);
             try {
                 const res = await fetch(btn.dataset.url, { headers: { 'Accept': 'text/html' } });
                 if (!res.ok) throw new Error('failed');

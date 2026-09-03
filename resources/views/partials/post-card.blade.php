@@ -97,7 +97,10 @@
         </svg>
     </div>
 
-<article data-swipe data-post-id="{{ $p['id'] }}" data-seen="{{ $seenKey }}" class="border-b border-neutral-800 py-3">
+{{-- data-card-link: any tap on the card that isn't a control opens the post
+     (see the whole-card handler in the layout). --}}
+<article data-swipe data-post-id="{{ $p['id'] }}" data-seen="{{ $seenKey }}"
+         data-card-link="{{ $internalUrl }}" class="border-b border-neutral-800 py-3 cursor-pointer">
     <div class="flex gap-3">
         @if ($previewImage)
             <div class="shrink-0 relative w-20 h-20 rounded-lg overflow-hidden bg-neutral-800">

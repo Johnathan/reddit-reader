@@ -15,29 +15,13 @@
     <meta name="theme-color" content="#efe7d6">
 
     <script src="https://cdn.tailwindcss.com"></script>
-    <script>
-        // Same warm "paper" remap as the app layout, so shared pages match.
-        const paper = {
-            100: '#1e2740', 200: '#293251', 300: '#46506b', 400: '#6a6250',
-            500: '#7c705a', 600: '#9a8c70', 700: '#cbbb98', 800: '#e5dcc7',
-            900: '#fbf8f1', 950: '#efe7d6',
-        };
-        tailwind.config = {
-            theme: { extend: { colors: {
-                neutral: paper,
-                zinc: paper,
-                orange: { 300: '#b8843a', 400: '#a8722a', 500: '#93611c', 600: '#7d5115' },
-                emerald: { 200: '#065f46', 300: '#047857', 400: '#059669', 700: '#34d399', 900: '#d1fae5', 950: '#ecfdf5' },
-                red:     { 200: '#7f1d1d', 300: '#991b1b', 400: '#b91c1c', 700: '#f87171', 900: '#fee2e2', 950: '#fef2f2' },
-            } } },
-        };
-    </script>
+    @include('partials.theme-config')
     <style>
         html { color-scheme: light; -webkit-text-size-adjust: 100%; }
         body { -webkit-tap-highlight-color: transparent; }
         main { overflow-x: clip; }
         .reddit-html { overflow-wrap: anywhere; word-break: break-word; }
-        .reddit-html a { overflow-wrap: anywhere; word-break: break-all; color: #93611c; text-decoration: underline; text-underline-offset: 2px; }
+        .reddit-html a { overflow-wrap: anywhere; word-break: break-all; color: #8f5d1a; text-decoration: underline; text-underline-offset: 2px; }
         .reddit-html p { margin: 0.5em 0; }
         .reddit-html blockquote { border-left: 3px solid #cbbb98; padding-left: 0.75em; margin: 0.5em 0; color: #6a6250; }
         .reddit-html pre { background: #f3ecda; padding: 0.5em; border-radius: 0.5em; overflow-x: auto; white-space: pre-wrap; word-break: break-word; }

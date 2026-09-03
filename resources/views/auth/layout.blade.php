@@ -19,21 +19,7 @@
 
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@simplewebauthn/browser@13.1.0/dist/bundle/index.umd.min.js"></script>
-    <script>
-        // Match the app's warm paper theme (see layouts/app.blade.php).
-        const paper = {
-            100: '#1e2740', 200: '#293251', 300: '#46506b', 400: '#6a6250',
-            500: '#7c705a', 600: '#9a8c70', 700: '#cbbb98', 800: '#e5dcc7',
-            900: '#fbf8f1', 950: '#efe7d6',
-        };
-        tailwind.config = {
-            theme: { extend: { colors: {
-                zinc: paper, neutral: paper,
-                orange: { 300: '#b8843a', 400: '#a8722a', 500: '#93611c', 600: '#7d5115' },
-                red: { 200: '#7f1d1d', 300: '#991b1b', 400: '#b91c1c', 700: '#f87171', 900: '#fee2e2', 950: '#fef2f2' },
-            } } },
-        };
-    </script>
+    @include('partials.theme-config')
     <style>
         html { color-scheme: light; -webkit-text-size-adjust: 100%; }
         /* Prevent iOS focus-zoom (font-size must be >= 16px on form controls). */

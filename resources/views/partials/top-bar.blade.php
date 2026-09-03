@@ -10,7 +10,10 @@
              so the back chevron is a phone-only affordance. --}}
         <div class="topbar-rail flex items-center min-w-0">
             @unless ($isTabRoot)
-                <button type="button" onclick="history.back()" aria-label="Back" class="lg:hidden -ml-1.5 p-1 text-orange-500 active:opacity-60">
+                {{-- Fallback to home: cold-launched on a deep URL (share link,
+                     restored tab) there is no history to go back to. --}}
+                <button type="button" onclick="history.length > 1 ? history.back() : (window.Turbo ? Turbo.visit('{{ route('home') }}') : location.assign('{{ route('home') }}'))"
+                        aria-label="Back" class="lg:hidden -ml-1.5 p-1 text-orange-500 active:opacity-60">
                     <svg viewBox="0 0 24 24" class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
                 </button>
             @endunless

@@ -102,9 +102,12 @@
         @if ($previewImage)
             <div class="shrink-0 relative w-20 h-20 rounded-lg overflow-hidden bg-neutral-800">
                 <a href="{{ $internalUrl }}" class="block w-full h-full">
-                    <img src="{{ $previewImage }}" loading="lazy"
+                    {{-- First tap unblurs, the next taps navigate — the old
+                         toggle swallowed every tap, making the thumbnail a
+                         permanent dead zone on NSFW posts. --}}
+                    <img src="{{ $previewImage }}" loading="lazy" alt=""
                          class="w-full h-full object-cover {{ $isNsfw ? 'blur-md nsfw-img' : '' }}"
-                         @if ($isNsfw) onclick="event.preventDefault(); this.classList.toggle('blur-md')" @endif>
+                         @if ($isNsfw) onclick="if (this.classList.contains('blur-md')) { event.preventDefault(); this.classList.remove('blur-md'); this.nextElementSibling?.remove(); }" @endif>
                     @if ($isNsfw)
                         <span class="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-red-300 bg-black/40 pointer-events-none">NSFW</span>
                     @endif
@@ -121,20 +124,43 @@
                     <span class="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 font-semibold text-[10px]">{{ $p['source_name'] }}</span>
                     <span>&middot;</span>
                 @elseif (! $hideSubreddit)
-                    <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 hover:text-neutral-900 font-medium">r/{{ $p['subreddit'] }}</a>
+                    <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 hover:text-neutral-100 font-medium">r/{{ $p['subreddit'] }}</a>
                     <span>&middot;</span>
                 @endif
                 @if ($p['author'] ?? null)
                     <span>u/{{ $p['author'] }}</span>
                     <span>&middot;</span>
                 @endif
-                <span>{{ isset($p['created_utc']) ? \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() : '' }}</span>
+                @if (isset($p['created_utc']))
+                    @php $posted = \Carbon\Carbon::createFromTimestamp($p['created_utc']); @endphp
+                    <time datetime="{{ $posted->toIso8601String() }}" title="{{ $posted->toDayDateTimeString() }}">{{ $posted->diffForHumans() }}</time>
+                @endif
                 @if ($p['stickied'] ?? false)
+                    <span>&middot;</span>
                     <span class="text-emerald-400 font-medium">pinned</span>
+                @endif
+                @if ($isNsfw)
+                    {{-- On the meta row, not just the thumbnail: an NSFW self
+                         or link post with no preview showed no warning at all. --}}
+                    <span class="px-1 py-px rounded bg-red-900/60 text-red-300 font-semibold text-[10px]">NSFW</span>
+                @endif
+                @if ($p['spoiler'] ?? false)
+                    <span class="px-1 py-px rounded bg-neutral-800 text-neutral-300 font-semibold text-[10px]">SPOILER</span>
+                @endif
+                @if (($p['locked'] ?? false) || ($p['archived'] ?? false))
+                    {{-- Known before you tap through, not after reading. --}}
+                    <span class="text-neutral-400" title="{{ ($p['locked'] ?? false) ? 'Comments are locked' : 'Thread is archived' }}">&#128274;</span>
+                @endif
+                @if (! empty($p['crosspost_parent_list']))
+                    <span class="text-neutral-400" title="Crosspost from r/{{ $p['crosspost_parent_list'][0]['subreddit'] ?? '?' }}">&#8644; crosspost</span>
+                @endif
+                @if (! empty($p['link_flair_text']))
+                    {{-- Link flair: the strongest scanning signal most subs have. --}}
+                    <span class="px-1.5 py-px rounded-full bg-neutral-800 text-neutral-300 text-[10px] max-w-[10rem] truncate">{{ $p['link_flair_text'] }}</span>
                 @endif
             </div>
 
-            <a href="{{ $internalUrl }}" data-mark-read class="font-medium leading-snug hover:text-orange-300 {{ $isRead ? 'post-read' : '' }}">
+            <a href="{{ $internalUrl }}" data-mark-read class="font-medium leading-snug hover:text-orange-500 {{ $isRead ? 'post-read' : '' }}">
                 {{ $p['title'] }}
             </a>
             @if (! empty($p['summary']))
@@ -149,7 +175,7 @@
                     <span>&#9650; {{ \App\Services\Reddit::formatScore($p['score']) }}</span>
                 @endif
                 @if (($p['num_comments'] ?? null) !== null)
-                    <a href="{{ $internalUrl }}" data-mark-read class="hover:text-neutral-900 {{ $isRead ? 'post-read' : '' }}">&#128172; {{ \App\Services\Reddit::formatScore($p['num_comments']) }} comments</a>
+                    <a href="{{ $internalUrl }}" data-mark-read class="hover:text-neutral-100 {{ $isRead ? 'post-read' : '' }}">&#128172; {{ \App\Services\Reddit::formatScore($p['num_comments']) }} comments</a>
                     @if ($newComments > 0)
                         {{-- RES-style: comments that arrived since you last opened this post. --}}
                         <span class="text-[11px] font-semibold text-emerald-400">+{{ $newComments }} new</span>

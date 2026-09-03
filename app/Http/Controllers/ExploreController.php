@@ -20,6 +20,12 @@ class ExploreController extends Controller
         $subscribed = $request->user()->subscriptions()->pluck('subreddit')->all();
         $subscribedSet = array_flip($subscribed);
 
+        // Shuffled so the "because you follow" seeds rotate between visits —
+        // unshuffled, the four oldest subscriptions were mined forever and
+        // the section never changed.
+        $seeds = $subscribed;
+        shuffle($seeds);
+
         $error = null;
         $popular = [];
 
@@ -34,7 +40,7 @@ class ExploreController extends Controller
         // subscriptions, with anything you already follow filtered out. Capped
         // so Explore stays fast (each seed is one cached about.json lookup).
         $related = [];
-        foreach (array_slice($subscribed, 0, 4) as $seed) {
+        foreach (array_slice($seeds, 0, 4) as $seed) {
             try {
                 $names = $this->reddit->relatedSubreddits($seed);
             } catch (RedditException $e) {

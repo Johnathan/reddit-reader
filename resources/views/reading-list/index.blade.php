@@ -37,7 +37,8 @@
                 <p class="text-sm text-neutral-500">Posts you finish in the reader show up here.</p>
             @else
                 <p class="text-neutral-400 mb-1">Your reading list is empty.</p>
-                <p class="text-sm text-neutral-500">Tap the bookmark on any post to stack it up for later.</p>
+                <p class="text-sm text-neutral-500 mb-4">Tap the bookmark on any post to stack it up for later.</p>
+                <a href="{{ route('home') }}" class="inline-block px-4 py-2 rounded-lg bg-neutral-800 text-neutral-200 text-sm hover:bg-neutral-700">Back to the feed</a>
             @endif
         </div>
     @else

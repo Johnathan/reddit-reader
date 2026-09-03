@@ -8,7 +8,7 @@
         {{-- Only Reddit items live in a subreddit; for HN/RSS the column holds
              the source key, so a r/{...} link would 404 on Reddit. --}}
         @if (($item->source ?? 'reddit') === 'reddit')
-            <a href="{{ route('subreddit.show', $item->subreddit) }}" class="text-neutral-300 hover:text-neutral-900 font-medium">r/{{ $item->subreddit }}</a>
+            <a href="{{ route('subreddit.show', $item->subreddit) }}" class="text-neutral-300 hover:text-neutral-100 font-medium">r/{{ $item->subreddit }}</a>
         @else
             <span class="text-neutral-300 font-medium">{{ $item->sourceLabel() }}</span>
         @endif
@@ -26,7 +26,7 @@
             <div class="text-xs text-neutral-500 mb-1">on &ldquo;{{ $item->post_title }}&rdquo;</div>
         @endif
     @else
-        <a href="{{ $url }}" class="font-medium leading-snug hover:text-orange-300">{{ $item->title }}</a>
+        <a href="{{ $url }}" class="font-medium leading-snug hover:text-orange-500">{{ $item->title }}</a>
     @endif
 
     @if ($item->body_html)
@@ -53,7 +53,7 @@
     <div class="flex items-center gap-3 mt-2 text-xs text-neutral-400">
         <span>&#9650; {{ \App\Services\Reddit::formatScore($item->score) }}</span>
         @if ($url)
-            <a href="{{ $url }}" class="hover:text-neutral-900">Open in thread</a>
+            <a href="{{ $url }}" class="hover:text-neutral-100">Open in thread</a>
         @endif
 
         <details class="relative ml-auto">

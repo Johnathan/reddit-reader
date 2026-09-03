@@ -39,7 +39,7 @@ class Reddit
      */
     public function listing(string $subredditOrMulti, string $sort = 'hot', array $params = []): ?array
     {
-        $sort = $this->normalizeSort($sort);
+        $sort = self::normalizeSort($sort);
         $query = $this->buildQuery($sort, $params);
 
         $subredditOrMulti = strtolower($subredditOrMulti);
@@ -131,7 +131,12 @@ class Reddit
         return $query;
     }
 
-    protected function normalizeSort(string $sort): string
+    /**
+     * Public so controllers can clamp ?sort= before it reaches views or the
+     * session — a junk value used to render a switcher with nothing selected
+     * (and stick to the subreddit's remembered sort).
+     */
+    public static function normalizeSort(string $sort): string
     {
         $sort = strtolower($sort);
 

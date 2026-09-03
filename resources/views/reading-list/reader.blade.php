@@ -2,7 +2,7 @@
 
 @section('subnav-title', 'reader')
 
-@section('title', 'Reader · reading list')
+@section('title', 'Reading list · reader')
 
 @section('content')
     @if ($items->isEmpty())

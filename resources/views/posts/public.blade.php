@@ -6,9 +6,12 @@
     @if ($post)
         @php
             // Unfurl previews for the chat apps a share link lands in. The
-            // description comes from the raw selftext, not the HTML render;
+            // description comes from the selftext with its markdown syntax
+            // stripped (an unfurl card showing "[text](url)" reads broken);
             // media stays out of the card for NSFW posts.
-            $ogDescription = trim(Str::limit(preg_replace('/\s+/', ' ', $post['selftext'] ?? ''), 200))
+            $plain = preg_replace('/\[([^\]]*)\]\([^)]*\)/', '$1', $post['selftext'] ?? '');
+            $plain = preg_replace('/[*_>#`~^\\\\]|&#x200B;/', '', $plain);
+            $ogDescription = trim(Str::limit(preg_replace('/\s+/', ' ', $plain), 200))
                 ?: 'A post on r/'.$subreddit;
             $ogImage = ($post['over_18'] ?? false)
                 ? null

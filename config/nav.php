@@ -40,6 +40,13 @@ return [
         'icon' => '<path d="M12 3l9 5-9 5-9-5z"/><path d="M3 13l9 5 9-5"/>',
     ],
     [
+        'label' => 'Saved',
+        'route' => 'saved.index',
+        'active' => ['saved.index'],
+        'when' => '^/saved',
+        'icon' => '<path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>',
+    ],
+    [
         'label' => 'Subs',
         'route' => 'subs.index',
         'active' => ['subs.index'],

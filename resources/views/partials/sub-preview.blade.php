@@ -16,7 +16,10 @@
                 $p = $post['data'];
                 $thumb = null;
                 if (! empty($p['thumbnail']) && str_starts_with($p['thumbnail'], 'http')) {
-                    $thumb = $p['thumbnail'];
+                    // Same proxy treatment as the feed card — otherwise an
+                    // imgur thumbnail renders here broken (UK-blocked) while
+                    // the identical post shows fine one tap away.
+                    $thumb = \App\Services\ImageProxy::wrap($p['thumbnail']);
                 }
                 $url = route('posts.show', [
                     'subreddit' => $p['subreddit'] ?? $subreddit,
@@ -32,7 +35,7 @@
                     <span class="w-10 h-10 rounded shrink-0 bg-neutral-800"></span>
                 @endif
                 <span class="min-w-0 flex-1">
-                    <span class="block text-xs leading-snug text-neutral-200 group-hover:text-orange-300 line-clamp-2">{{ $p['title'] ?? '' }}</span>
+                    <span class="block text-xs leading-snug text-neutral-200 group-hover:text-orange-500 line-clamp-2">{{ $p['title'] ?? '' }}</span>
                     <span class="block text-[11px] text-neutral-500 mt-0.5">
                         &#9650; {{ \App\Services\Reddit::formatScore($p['score'] ?? 0) }}
                         &middot; {{ \App\Services\Reddit::formatScore($p['num_comments'] ?? 0) }} comments

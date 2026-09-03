@@ -13,11 +13,11 @@
             {{ $item->sourceLabel() }} &middot; saved {{ $item->created_at->diffForHumans() }}
         </div>
 
-        <a href="{{ $item->url() }}" class="font-medium leading-snug hover:text-orange-300">{{ $item->title }}</a>
+        <a href="{{ $item->url() }}" class="font-medium leading-snug hover:text-orange-500">{{ $item->title }}</a>
 
         <div class="flex items-center gap-3 mt-2 text-xs text-neutral-400">
             <span>&#9650; {{ \App\Services\Reddit::formatScore($item->score) }}</span>
-            <a href="{{ $item->url() }}" class="hover:text-neutral-900">&#128172; {{ \App\Services\Reddit::formatScore($item->num_comments) }} comments</a>
+            <a href="{{ $item->url() }}" class="hover:text-neutral-100">&#128172; {{ \App\Services\Reddit::formatScore($item->num_comments) }} comments</a>
 
             <button type="button" data-reading-read data-post-id="{{ $item->post_id }}" data-source="{{ $item->source ?? 'reddit' }}"
                     aria-pressed="{{ $item->isRead() ? 'true' : 'false' }}"

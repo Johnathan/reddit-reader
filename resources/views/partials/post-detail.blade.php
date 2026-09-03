@@ -69,7 +69,7 @@
             @if ($publicView)
                 <span class="text-neutral-300 font-medium">r/{{ $p['subreddit'] }}</span>
             @else
-                <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 font-medium hover:text-neutral-900">r/{{ $p['subreddit'] }}</a>
+                <a href="{{ route('subreddit.show', $p['subreddit']) }}" class="text-neutral-300 font-medium hover:text-neutral-100">r/{{ $p['subreddit'] }}</a>
             @endif
             <span>&middot;</span>
             <span>u/{{ $p['author'] ?? '[deleted]' }}</span>
@@ -86,7 +86,7 @@
         {{-- The ONLY links that leave the app live in here, so a tap can't
              land you on Reddit by accident. --}}
         <details class="relative shrink-0">
-            <summary class="list-none cursor-pointer px-2 -mt-1 text-lg leading-none text-neutral-500 hover:text-neutral-800 select-none">&#8943;</summary>
+            <summary class="list-none cursor-pointer px-2 -mt-1 text-lg leading-none text-neutral-500 hover:text-neutral-100 select-none">&#8943;</summary>
             <div class="absolute right-0 mt-1 z-20 w-52 rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl py-1 text-sm">
                 @if ($showOpenOriginal)
                     <a href="{{ $outUrl }}" target="_blank" rel="noopener" class="block px-3 py-2 hover:bg-neutral-800">Open original link &#8599;</a>
@@ -107,7 +107,7 @@
     @elseif (!empty($galleryImgs))
         <div class="space-y-2">
             @foreach ($galleryImgs as $g)
-                <img src="{{ $g }}" loading="lazy" class="w-full rounded-lg {{ $nsfwClass }}"
+                <img src="{{ $g }}" loading="lazy" alt="" class="w-full rounded-lg {{ $nsfwClass }}"
                      @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
             @endforeach
         </div>
@@ -119,7 +119,7 @@
             <source src="{{ $videoUrl }}" type="video/mp4">
         </video>
     @elseif ($imageUrl)
-        <img src="{{ $imageUrl }}" loading="lazy" class="w-full rounded-lg {{ $nsfwClass }}"
+        <img src="{{ $imageUrl }}" loading="lazy" alt="" class="w-full rounded-lg {{ $nsfwClass }}"
              @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
     @endif
 

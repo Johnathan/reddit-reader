@@ -20,8 +20,9 @@
             </a>
         @endforeach
 
-        {{-- Not in config/nav.php on purpose: the mobile tab bar is full, and
-             on phones the floating dock already covers this. --}}
+        {{-- Not in config/nav.php on purpose: the mobile tab bar is full at
+             five, and on phones the floating dock plus the Saved page's
+             cross-link cover this. --}}
         @php $readingUnread = ($myReadingList ?? collect())->whereNull('read_at')->count(); @endphp
         <a href="{{ route('reading.index') }}"
            class="{{ $rowBase }} {{ request()->routeIs('reading.index') ? $rowOn : $rowIdle }}">
@@ -32,14 +33,6 @@
             @if ($readingUnread)
                 <span class="ml-auto min-w-[1.25rem] px-1.5 py-0.5 rounded-full bg-orange-500 text-white text-[10px] font-bold text-center">{{ $readingUnread }}</span>
             @endif
-        </a>
-
-        <a href="{{ route('saved.index') }}"
-           class="{{ $rowBase }} {{ request()->routeIs('saved.index') ? $rowOn : $rowIdle }}">
-            <svg viewBox="0 0 24 24" class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4"/>
-            </svg>
-            <span>Saved</span>
         </a>
 
         <div class="mt-4 border-t border-neutral-800"></div>

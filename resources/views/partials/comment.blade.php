@@ -48,7 +48,7 @@
         <div data-comment class="py-2">
             <div data-collapse class="comment-head cursor-pointer text-xs text-neutral-500 flex items-center gap-1.5 flex-wrap mb-1">
                 <button type="button" data-collapse-btn
-                        class="text-neutral-600 hover:text-neutral-900 w-4">[-]</button>
+                        class="text-neutral-600 hover:text-neutral-100 w-4">[-]</button>
                 <span class="{{ $distinguished === 'moderator' ? 'text-emerald-400 font-medium' : 'font-medium text-neutral-300' }}">
                     u/{{ $data['author'] ?? '[deleted]' }}
                 </span>

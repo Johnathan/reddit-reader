@@ -18,7 +18,7 @@
 <div data-unfold-card class="bg-neutral-900 rounded-lg">
 <div class="flex items-center justify-between gap-2 px-3 py-2">
     <div class="min-w-0">
-        <a href="{{ route('subreddit.show', strtolower($name)) }}" class="font-medium hover:text-orange-300">r/{{ $name }}</a>
+        <a href="{{ route('subreddit.show', strtolower($name)) }}" class="font-medium hover:text-orange-500">r/{{ $name }}</a>
         <div class="text-xs text-neutral-500 truncate">
             @if (! is_null($members))
                 {{ \App\Services\Reddit::formatScore((int) $members) }} members

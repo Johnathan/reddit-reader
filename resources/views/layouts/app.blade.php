@@ -151,7 +151,7 @@
         /* Posts you've already opened: the title quiets down, visited-link
            style, so the unread ones stand out when scanning the feed. */
         [data-mark-read].post-read { color: #8a7f68; font-weight: 400; }
-        [data-mark-read].post-read:hover { color: #b8843a; }
+        [data-mark-read].post-read:hover { color: #93611c; }
 
         /* Small icon buttons get a finger-sized hit area without changing the
            layout: the pseudo-element overflows the button invisibly. Apple asks
@@ -208,7 +208,11 @@
         </main>
     </div>
 
-    @include('partials.reading-dock')
+    {{-- Not on the reading-list pages themselves: a floating miniature of the
+         page you're on, covering the reader deck's own controls. --}}
+    @unless (request()->routeIs('reading.index', 'reading.reader'))
+        @include('partials.reading-dock')
+    @endunless
 
     @include('partials.tab-bar')
 
@@ -223,18 +227,22 @@
         const fmt = n => n >= 1e6 ? (n / 1e6).toFixed(1) + 'm' : n >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : '' + n;
         const csrf = () => document.querySelector('meta[name="csrf-token"]').content;
 
+        const motionOK = ! window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
         // ---- floating toast (fixed position, never reflows) -----------------
         window.showToast = function (message, isError) {
             var t = document.createElement('div');
-            t.setAttribute('role', 'status');
+            // alert for errors so screen readers actually announce them.
+            t.setAttribute('role', isError ? 'alert' : 'status');
             t.dataset.toast = '1';
-            t.className = 'fixed left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-full text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg';
+            t.className = 'fixed left-1/2 -translate-x-1/2 z-[60] flex items-center gap-2 max-w-[calc(100%-1.5rem)] px-4 py-2.5 rounded-2xl text-sm font-medium bg-neutral-900 text-neutral-100 border border-neutral-700 shadow-lg';
             t.style.bottom = 'calc(1rem + env(safe-area-inset-bottom))';
-            t.style.transition = 'opacity .3s ease, transform .3s ease';
+            if (motionOK) t.style.transition = 'opacity .3s ease, transform .3s ease';
             var dot = document.createElement('span');
             dot.className = 'w-2 h-2 rounded-full shrink-0 ' + (isError ? 'bg-red-500' : 'bg-emerald-500');
             var txt = document.createElement('span');
-            txt.className = 'truncate';
+            // Two lines, not truncate — a truncated error explains nothing.
+            txt.className = 'line-clamp-2';
             txt.textContent = message;
             t.appendChild(dot); t.appendChild(txt);
             document.body.appendChild(t);
@@ -248,10 +256,12 @@
         // ---- custom confirm dialog (replaces the ugly native confirm()) -----
         window.confirmDialog = function (message, opts) {
             opts = opts || {};
+            const restoreFocus = document.activeElement;
             return new Promise(function (resolve) {
                 const overlay = document.createElement('div');
                 overlay.dataset.modal = '1';
-                overlay.className = 'fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 opacity-0 transition-opacity duration-150';
+                overlay.className = 'fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/40 opacity-0'
+                    + (motionOK ? ' transition-opacity duration-150' : '');
                 const card = document.createElement('div');
                 card.setAttribute('role', 'dialog');
                 card.setAttribute('aria-modal', 'true');
@@ -284,9 +294,17 @@
                     overlay.classList.add('opacity-0');
                     card.classList.add('translate-y-3');
                     setTimeout(function () { overlay.remove(); }, 150);
+                    // Hand focus back to whatever opened the dialog.
+                    if (restoreFocus && restoreFocus.focus) restoreFocus.focus();
                     resolve(val);
                 }
-                function onKey(e) { if (e.key === 'Escape') done(false); else if (e.key === 'Enter') done(true); }
+                // Enter confirms ONLY with focus inside the dialog — bound to
+                // document, a stray Enter anywhere on the page was confirming
+                // destructive actions. Escape always cancels.
+                function onKey(e) {
+                    if (e.key === 'Escape') done(false);
+                    else if (e.key === 'Enter' && card.contains(document.activeElement)) done(true);
+                }
                 cancel.addEventListener('click', function () { done(false); });
                 ok.addEventListener('click', function () { done(true); });
                 overlay.addEventListener('click', function (e) { if (e.target === overlay) done(false); });
@@ -382,7 +400,13 @@
                     headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' },
                     body: new FormData(form),
                 });
-                if (!res.ok) throw new Error('failed');
+                if (!res.ok) {
+                    let msg = '';
+                    try { msg = (await res.json()).message || ''; } catch (e2) {}
+                    const err = new Error(msg || 'failed');
+                    err.fromServer = msg !== '';
+                    throw err;
+                }
                 const data = await res.json().catch(() => ({}));
 
                 if (form.hasAttribute('data-ajax-remove')) {
@@ -403,7 +427,7 @@
                 if (menu) menu.open = false;
                 if (data.message) showToast(data.message);
             } catch (err) {
-                showToast('Something went wrong. Please try again.', true);
+                toastError(err, 'Something went wrong. Please try again.');
             } finally {
                 if (btn) btn.disabled = false;
             }
@@ -417,10 +441,24 @@
                 method: method,
                 headers: { 'X-CSRF-TOKEN': csrf(), 'Accept': 'application/json' },
                 body: body,
-            }).then(function (r) {
-                if (!r.ok) throw new Error('failed');
+            }).then(async function (r) {
+                if (!r.ok) {
+                    // Surface the server's own message — it says WHY ("Could
+                    // not read that to archive it.") where a generic toast
+                    // says nothing.
+                    let msg = '';
+                    try { msg = (await r.json()).message || ''; } catch (e) {}
+                    const err = new Error(msg || 'failed');
+                    err.fromServer = msg !== '';
+                    throw err;
+                }
                 return r.json();
             });
+        }
+
+        // The server's message when it sent one, the fallback otherwise.
+        function toastError(err, fallback) {
+            showToast(err && err.fromServer ? err.message : fallback, true);
         }
 
         function paintLaterButton(btn, saved) {
@@ -469,7 +507,7 @@
             link.href = item.url;
             link.className = 'min-w-0 flex-1 group';
             const title = document.createElement('span');
-            title.className = 'block text-xs leading-snug text-neutral-200 group-hover:text-orange-300 line-clamp-2';
+            title.className = 'block text-xs leading-snug text-neutral-200 group-hover:text-orange-500 line-clamp-2';
             title.textContent = item.title;
             const meta = document.createElement('span');
             meta.className = 'block text-[11px] text-neutral-500 mt-0.5';
@@ -526,7 +564,7 @@
                     updateDock(state);
                 } catch (err) {
                     paintAllLaterButtons(d.postId, wasSaved);   // roll back
-                    showToast('Could not update your reading list.', true);
+                    toastError(err, 'Could not update your reading list.');
                 } finally {
                     save.__busy = false;
                 }
@@ -556,7 +594,7 @@
                     updateDock(await readingApi('/reading-list/' + encodeURIComponent(id), 'POST',
                         new URLSearchParams({ _method: 'DELETE', source: remove.dataset.source || 'reddit' })));
                 } catch (err) {
-                    showToast('Could not remove that.', true);
+                    toastError(err, 'Could not remove that.');
                 }
                 return;
             }
@@ -579,7 +617,7 @@
                     if (n) n.textContent = state.unread;
                     updateDock(state);
                 } catch (err) {
-                    showToast('Could not update that.', true);
+                    toastError(err, 'Could not update that.');
                 }
                 return;
             }
@@ -600,7 +638,7 @@
                     showToast(state.message);
                     Turbo ? Turbo.visit(location.href, { action: 'replace' }) : location.reload();
                 } catch (err) {
-                    showToast('Could not clear the list.', true);
+                    toastError(err, 'Could not clear the list.');
                 }
             }
         });
@@ -629,6 +667,14 @@
             const d = btn.dataset;
             const on = d.archived === '1';
             btn.__busy = true;
+
+            // Removing destroys the archived copy — which may be the only
+            // copy left if the original was deleted. Worth one confirmation.
+            if (on) {
+                const sure = await confirmDialog('Remove this from your archive? The saved copy is deleted.', { danger: true, okLabel: 'Remove' });
+                if (!sure) { btn.__busy = false; return; }
+            }
+
             btn.classList.add('opacity-50');
 
             try {
@@ -648,11 +694,34 @@
                     .forEach(function (b) { paintArchiveButton(b, !on); });
                 showToast(res.message);
             } catch (err) {
-                showToast('Could not update your archive.', true);
+                toastError(err, 'Could not update your archive.');
             } finally {
                 btn.__busy = false;
                 btn.classList.remove('opacity-50');
             }
+        });
+
+        // ---- re-tapping the active tab scrolls to the top -------------------
+        // After a few hundred cards of infinite scroll there was no way back
+        // up; this is the platform-native gesture for it.
+        document.addEventListener('click', function (e) {
+            const tab = e.target.closest('[data-tab]');
+            if (!tab || !tab.dataset.activeWhen) return;
+            let active = false;
+            try { active = new RegExp(tab.dataset.activeWhen).test(location.pathname); } catch (err) {}
+            if (active) {
+                e.preventDefault();
+                window.scrollTo({ top: 0, behavior: motionOK ? 'smooth' : 'auto' });
+            }
+        });
+
+        // ---- tapping outside the reading pad closes it ----------------------
+        document.addEventListener('click', function (e) {
+            const panel = document.querySelector('[data-dock-panel]');
+            if (!panel || panel.hidden || e.target.closest('#reading-dock')) return;
+            panel.hidden = true;
+            const toggle = document.querySelector('[data-dock-toggle]');
+            if (toggle) toggle.setAttribute('aria-expanded', 'false');
         });
 
         // ---- share a post's public link -------------------------------------
@@ -698,7 +767,7 @@
                 await readingApi('/saved/' + encodeURIComponent(field.dataset.id), 'POST', body);
                 showToast('Updated');
             } catch (err) {
-                showToast('Could not save that change.', true);
+                toastError(err, 'Could not save that change.');
             }
         });
 
@@ -706,7 +775,11 @@
         // Organise popover on the page about it — no reload.
         async function createFolderInline(input) {
             const name = input.value.trim();
-            if (!name) { input.hidden = true; return; }
+            // Hidden synchronously: Enter and the resulting focusout both call
+            // this, and hiding only after the awaits let the pair race into
+            // creating the folder twice ("Work" and "work-2").
+            input.hidden = true;
+            if (!name) return;
             try {
                 const folder = await readingApi(@json(route('saved.folders.store')), 'POST',
                     new URLSearchParams({ name: name }));
@@ -725,9 +798,9 @@
 
                 showToast('Filed under “' + folder.name + '”');
                 input.value = '';
-                input.hidden = true;
             } catch (err) {
-                showToast('Could not create that folder.', true);
+                input.hidden = false;   // let them retry or Escape out
+                toastError(err, 'Could not create that folder.');
             }
         }
 

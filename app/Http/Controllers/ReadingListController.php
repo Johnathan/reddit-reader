@@ -124,7 +124,9 @@ class ReadingListController extends Controller
     {
         $data = $request->validate([
             'post_id' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
-            'source' => ['nullable', 'string', 'max:30', 'regex:/^[a-z0-9_]+$/'],
+            // Only sources the app can resolve back into a page — an unknown
+            // key would make a row that 404s forever when opened.
+            'source' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['reddit', 'hn', ...array_keys(\App\Services\RssSource::all())])],
             'url' => ['nullable', 'url', 'max:2000'],
             'subreddit' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_]+$/'],
             'title' => ['required', 'string', 'max:300'],

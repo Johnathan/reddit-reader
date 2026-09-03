@@ -56,7 +56,13 @@
             document.getElementById('start_authentication_response').value = JSON.stringify(assertion);
             document.getElementById('passkey-login-form').submit();
         } catch (error) {
-            if (error.name !== 'NotAllowedError') {
+            // NotAllowedError is both "user dismissed the sheet" and "no
+            // passkey exists on this device" — swallowing it silently left a
+            // new device with a button that appeared to do nothing. Explain,
+            // gently, without nagging someone who deliberately cancelled.
+            if (error.name === 'NotAllowedError') {
+                showError('No passkey was used. If this device doesn’t have one yet, add it from Settings → Passkeys on a device that’s already signed in, or use that device to sign in here.');
+            } else {
                 showError(error.message ?? 'Sign in failed. Please try again.');
             }
             button.disabled = false;

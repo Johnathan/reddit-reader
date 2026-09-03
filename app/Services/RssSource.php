@@ -46,16 +46,27 @@ class RssSource
 
         $all = Cache::remember('rss:'.$key, 300, fn () => $this->fetch($key, $source));
 
+        // The cursor is "timestamp:id" of the last item shown. A bare
+        // timestamp cursor once dropped every OTHER item sharing that second
+        // at a page boundary (wire feeds do publish batches in one second);
+        // the id tie-break makes the position exact. The listing is sorted
+        // (created_utc desc, id asc), so "after the cursor" is: strictly
+        // older, or same second with a later id.
         if ($cursor !== null) {
-            $all = array_values(array_filter($all, fn ($i) => $i['created_utc'] < (int) $cursor));
+            [$ts, $lastId] = array_pad(explode(':', $cursor, 2), 2, '');
+            $ts = (int) $ts;
+
+            $all = array_values(array_filter($all, fn ($i) => $i['created_utc'] < $ts
+                || ($lastId !== '' && $i['created_utc'] === $ts && strcmp($i['id'], $lastId) > 0)));
         }
 
         $page = array_slice($all, 0, 20);
         $more = count($all) > count($page);
+        $last = $page !== [] ? end($page) : null;
 
         return [
             'items' => $page,
-            'cursor' => $more && $page !== [] ? (string) end($page)['created_utc'] : null,
+            'cursor' => $more && $last ? $last['created_utc'].':'.$last['id'] : null,
         ];
     }
 
@@ -109,7 +120,7 @@ class RssSource
         $entries = $xml->channel->item ?? $xml->entry ?? [];
 
         foreach ($entries as $entry) {
-            $link = trim((string) ($entry->link['href'] ?? $entry->link));
+            $link = $this->entryLink($entry);
             $title = trim((string) $entry->title);
 
             if ($link === '' || $title === '') {
@@ -117,6 +128,10 @@ class RssSource
             }
 
             $when = (string) ($entry->pubDate ?? $entry->updated ?? $entry->published ?? '');
+            // strtotime() returns false on a malformed date; (int) false is 0,
+            // which sank the item to 1970 ("55 years ago", bottom of every
+            // "new" merge). An unparseable date reads as "just published".
+            $ts = $when !== '' ? strtotime($when) : false;
             $thumb = null;
             foreach ($entry->children('http://search.yahoo.com/mrss/') as $mediaTag) {
                 $thumb = (string) ($mediaTag['url'] ?? '') ?: $thumb;
@@ -129,7 +144,7 @@ class RssSource
                 'id' => substr(sha1($link), 0, 16),
                 'title' => $title,
                 'author' => null,
-                'created_utc' => $when !== '' ? (int) strtotime($when) : 0,
+                'created_utc' => $ts !== false ? $ts : time(),
                 'score' => null,
                 'num_comments' => null,
                 'url' => $link,
@@ -145,8 +160,31 @@ class RssSource
             ];
         }
 
-        usort($items, fn ($a, $b) => $b['created_utc'] <=> $a['created_utc']);
+        // Deterministic order: newest first, id as tie-break — the paging
+        // cursor depends on ties always resolving the same way.
+        usort($items, fn ($a, $b) => [$b['created_utc'], $a['id']] <=> [$a['created_utc'], $b['id']]);
 
         return $items;
+    }
+
+    /**
+     * The entry's article URL. Atom entries carry several <link> siblings
+     * (self, alternate, related…) in arbitrary order — taking the first one
+     * blindly can key every item to the FEED's own URL. Prefer the
+     * rel="alternate" (or rel-less) link; RSS 2.0's plain <link>text</link>
+     * falls through to the string cast.
+     */
+    protected function entryLink(\SimpleXMLElement $entry): string
+    {
+        foreach ($entry->link as $link) {
+            $rel = (string) ($link['rel'] ?? '');
+            $href = trim((string) ($link['href'] ?? ''));
+
+            if ($href !== '' && ($rel === '' || $rel === 'alternate')) {
+                return $href;
+            }
+        }
+
+        return trim((string) ($entry->link['href'] ?? $entry->link));
     }
 }

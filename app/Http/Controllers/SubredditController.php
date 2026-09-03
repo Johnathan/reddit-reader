@@ -54,12 +54,14 @@ class SubredditController extends Controller
         $sessionKey = 'sub-sort.'.$subreddit;
 
         if ($request->query('sort') !== null) {
-            $sort = $request->string('sort')->toString();
+            $sort = Reddit::normalizeSort($request->string('sort')->toString());
             $t = $request->query('t');
             $request->session()->put($sessionKey, ['sort' => $sort, 't' => $t]);
         } else {
             $remembered = $request->session()->get($sessionKey, []);
-            $sort = $remembered['sort'] ?? 'hot';
+            // Normalized on read too, so junk remembered before clamping
+            // existed doesn't stick to the subreddit forever.
+            $sort = Reddit::normalizeSort($remembered['sort'] ?? 'hot');
             $t = $remembered['t'] ?? null;
         }
 

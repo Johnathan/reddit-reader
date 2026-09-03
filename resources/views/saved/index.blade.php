@@ -57,6 +57,9 @@
                 {{ $total }} saved
             @endif
         </span>
+        {{-- On phones the tab bar has Saved but not the reading list, so this
+             is the mobile route in (the dock only shows when non-empty). --}}
+        <a href="{{ route('reading.index') }}" class="ml-auto hover:text-orange-500">Reading list &rarr;</a>
         <details class="relative">
             <summary class="list-none cursor-pointer hover:text-orange-500 select-none">New folder</summary>
             <form method="POST" action="{{ route('saved.folders.store') }}"
@@ -82,5 +85,7 @@
         </div>
     @endforelse
 
-    <div class="mt-4">{{ $items->links() }}</div>
+    {{-- Custom view: Laravel's default paginator uses gray/white classes the
+         paper palette doesn't remap, which rendered as a stark white block. --}}
+    <div class="mt-4">{{ $items->links('partials.pagination') }}</div>
 @endsection

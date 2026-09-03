@@ -51,15 +51,18 @@ class AppServiceProvider extends ServiceProvider
             ) ?? collect());
 
             // The reading-list dock floats on every page...
-            $view->with('myReadingList', $perRequest(
+            $list = $perRequest(
                 'app.myReadingList',
                 fn ($user) => $user->readingList()->orderBy('read_at')->orderByDesc('created_at')->get(),
-            ) ?? collect());
+            );
+            $view->with('myReadingList', $list ?? collect());
 
             // ...and every post card needs to know if it's already on it.
+            // Derived from the collection just loaded — this used to be a
+            // second query over the exact same rows on every request.
             $view->with('myReadingListIds', $perRequest(
                 'app.myReadingListIds',
-                fn ($user) => array_flip($user->readingList()->pluck('post_id')->all()),
+                fn () => array_flip(($list ?? collect())->pluck('post_id')->all()),
             ) ?? []);
 
             // Which posts/comments are already in the archive, and where they

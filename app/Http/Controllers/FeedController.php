@@ -48,7 +48,7 @@ class FeedController extends Controller
     {
         $feed = $request->user()->feeds()->with('subreddits')->where('slug', $slug)->firstOrFail();
 
-        $sort = $request->string('sort', 'hot')->toString();
+        $sort = \App\Services\Reddit::normalizeSort($request->string('sort', 'hot')->toString());
         $subreddits = $feed->subredditNames();
 
         $error = null;

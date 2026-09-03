@@ -40,15 +40,20 @@
     <h2 class="text-sm font-semibold text-neutral-400 mb-2">Your subscriptions</h2>
     @forelse ($subscriptions as $s)
         <div class="flex items-center justify-between gap-3 bg-neutral-900 rounded-lg px-3 py-2 mb-2">
-            <a href="{{ route('subreddit.show', $s->subreddit) }}" class="font-medium hover:text-orange-300">r/{{ $s->subreddit }}</a>
+            <a href="{{ route('subreddit.show', $s->subreddit) }}" class="font-medium hover:text-orange-500">r/{{ $s->subreddit }}</a>
             @include('partials.subscribe-button', ['subreddit' => $s->subreddit, 'subscribed' => true, 'subscribedLabel' => 'Unsubscribe'])
         </div>
     @empty
         <p class="text-neutral-500 text-sm">No subscriptions yet &mdash; search above to find subreddits.</p>
     @endforelse
 
-    <form method="POST" action="{{ Route::has('logout') ? route('logout') : '#' }}" data-turbo="false" class="mt-8 pt-4 border-t border-neutral-800">
-        @csrf
-        <button type="submit" class="text-sm text-neutral-500 hover:text-red-400">Log out</button>
-    </form>
+    <div class="mt-8 pt-4 border-t border-neutral-800 flex items-center justify-between">
+        {{-- The only in-app door to passkey management — without it the page
+             was reachable solely by typing the URL. --}}
+        <a href="{{ route('settings.passkeys') }}" class="text-sm text-neutral-500 hover:text-orange-500">Passkeys</a>
+        <form method="POST" action="{{ Route::has('logout') ? route('logout') : '#' }}" data-turbo="false">
+            @csrf
+            <button type="submit" class="text-sm text-neutral-500 hover:text-red-400">Log out</button>
+        </form>
+    </div>
 @endsection

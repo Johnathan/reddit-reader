@@ -21,7 +21,7 @@
         </div>
 
         <details class="relative shrink-0">
-            <summary class="list-none cursor-pointer px-2 -mt-1 text-lg leading-none text-neutral-500 hover:text-neutral-800 select-none">&#8943;</summary>
+            <summary class="list-none cursor-pointer px-2 -mt-1 text-lg leading-none text-neutral-500 hover:text-neutral-100 select-none">&#8943;</summary>
             <div class="absolute right-0 mt-1 z-20 w-52 rounded-lg border border-neutral-700 bg-neutral-900 shadow-xl py-1 text-sm">
                 @if ($p['url'])
                     <a href="{{ $p['url'] }}" target="_blank" rel="noopener" class="block px-3 py-2 hover:bg-neutral-800">Open original link &#8599;</a>

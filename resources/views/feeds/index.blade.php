@@ -19,7 +19,7 @@
     @forelse ($feeds as $feed)
         <div data-removable class="bg-neutral-900 rounded-lg px-3 py-3 mb-2">
             <div class="flex items-center justify-between gap-2">
-                <a href="{{ route('feeds.show', $feed->slug) }}" class="font-medium hover:text-orange-300">{{ $feed->name }}</a>
+                <a href="{{ route('feeds.show', $feed->slug) }}" class="font-medium hover:text-orange-500">{{ $feed->name }}</a>
                 <div class="flex items-center gap-3">
                     <span class="text-xs text-neutral-500">{{ $feed->subreddits->count() }} subs</span>
                     <form method="POST" action="{{ route('feeds.destroy', $feed) }}"

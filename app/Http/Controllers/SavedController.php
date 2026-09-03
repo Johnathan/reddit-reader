@@ -50,7 +50,9 @@ class SavedController extends Controller
             'items' => $items,
             'q' => $q,
             'folders' => $user->folders()->withCount('items')->orderBy('name')->get(),
-            'tags' => $user->tags()->withCount('items')->orderBy('name')->get(),
+            // No withCount: the chips render only names, and the count was a
+            // correlated subquery per tag paid on every archive page view.
+            'tags' => $user->tags()->orderBy('name')->get(),
             'activeFolder' => $request->string('folder')->toString(),
             'activeTag' => $request->string('tag')->toString(),
             'activeKind' => $request->string('kind')->toString(),
@@ -70,7 +72,9 @@ class SavedController extends Controller
     {
         $data = $request->validate([
             'kind' => ['required', 'in:post,comment'],
-            'source' => ['nullable', 'string', 'max:30', 'regex:/^[a-z0-9_]+$/'],
+            // Only sources the app can resolve back into a page — an unknown
+            // key would make a row that 404s forever when opened.
+            'source' => ['nullable', 'string', \Illuminate\Validation\Rule::in(['reddit', 'hn', ...array_keys(\App\Services\RssSource::all())])],
             'reddit_id' => ['required', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
             'subreddit' => ['required', 'string', 'max:50', 'regex:/^[A-Za-z0-9_]+$/'],
             'post_id' => ['nullable', 'string', 'max:20', 'regex:/^[A-Za-z0-9]+$/'],
@@ -106,9 +110,13 @@ class SavedController extends Controller
             $folderId = null;
         }
 
+        // folder_id only when the request actually sent one: the archive
+        // button never does, and writing null here silently unfiled an
+        // already-archived item every time it was re-saved.
         $item = $request->user()->savedItems()->updateOrCreate(
             ['source' => $source, 'reddit_id' => $data['reddit_id']],
-            $snapshot + ['kind' => $data['kind'], 'folder_id' => $folderId],
+            $snapshot + ['kind' => $data['kind']]
+                + ($request->filled('folder_id') ? ['folder_id' => $folderId] : []),
         );
 
         return response()->json([

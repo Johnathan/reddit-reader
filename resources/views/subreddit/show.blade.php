@@ -16,7 +16,7 @@
             <div class="flex flex-wrap gap-1.5">
                 @foreach ($related as $rel)
                     <a href="{{ route('subreddit.show', $rel) }}"
-                       class="text-xs px-2.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300 hover:border-orange-500 hover:text-orange-300">
+                       class="text-xs px-2.5 py-1 rounded-full bg-neutral-900 border border-neutral-800 text-neutral-300 hover:border-orange-500 hover:text-orange-500">
                         r/{{ $rel }}
                     </a>
                 @endforeach

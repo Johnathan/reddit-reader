@@ -153,15 +153,21 @@ class ReadingListTest extends TestCase
 
     public function test_the_dock_is_hidden_when_the_list_is_empty(): void
     {
+        // The dock lives on ordinary pages (checked on /saved — it needs no
+        // Reddit fetch); the reading-list pages themselves never render it,
+        // since it would be a floating miniature of the page you're on.
         $user = User::factory()->create();
 
-        $empty = $this->actingAs($user)->get('/reading-list')->getContent();
+        $empty = $this->actingAs($user)->get('/saved')->getContent();
         $this->assertMatchesRegularExpression('/id="reading-dock"[^>]*class="[^"]*hidden/s', $empty);
 
         $this->item($user);
 
-        $full = $this->actingAs($user)->get('/reading-list')->getContent();
+        $full = $this->actingAs($user)->get('/saved')->getContent();
         $this->assertDoesNotMatchRegularExpression('/id="reading-dock"[^>]*class="[^"]*hidden/s', $full);
         $this->assertStringContainsString('A post worth reading later', $full);
+
+        $this->assertStringNotContainsString('id="reading-dock"',
+            $this->actingAs($user)->get('/reading-list')->getContent());
     }
 }

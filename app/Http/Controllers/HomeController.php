@@ -18,7 +18,7 @@ class HomeController extends Controller
      */
     public function index(Request $request): View
     {
-        $sort = $request->string('sort', 'hot')->toString();
+        $sort = \App\Services\Reddit::normalizeSort($request->string('sort', 'hot')->toString());
 
         $subreddits = Subscription::query()
             ->where('user_id', $request->user()->id)
@@ -26,8 +26,12 @@ class HomeController extends Controller
             ->pluck('subreddit')
             ->all();
 
+        // Only string-keyed string cursors survive: ?c=foo gives an integer
+        // key no source matches, and ?c[reddit][a]=1 gives an array value —
+        // either once made every source read as exhausted (an empty feed) or
+        // warned on the string cast. Anything malformed reads as page one.
         $cursors = collect((array) $request->query('c', []))
-            ->map(fn ($v) => (string) $v)
+            ->filter(fn ($v, $k) => is_string($k) && is_string($v) && $v !== '')
             ->all();
 
         $disabledSources = $request->user()->disabledSources();

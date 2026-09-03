@@ -3,7 +3,7 @@
 <div data-dock-row data-post-id="{{ $item->post_id }}"
      class="flex items-start gap-2 px-3 py-2 hover:bg-neutral-800/60 {{ $item->isRead() ? 'opacity-50' : '' }}">
     <a href="{{ $item->url() }}" class="min-w-0 flex-1 group">
-        <span class="block text-xs leading-snug text-neutral-200 group-hover:text-orange-300 line-clamp-2">{{ $item->title }}</span>
+        <span class="block text-xs leading-snug text-neutral-200 group-hover:text-orange-500 line-clamp-2">{{ $item->title }}</span>
         <span class="block text-[11px] text-neutral-500 mt-0.5">{{ $item->sourceLabel() }} &middot; {{ \App\Services\Reddit::formatScore($item->num_comments) }} comments</span>
     </a>
     <button type="button" data-dock-remove data-post-id="{{ $item->post_id }}" data-source="{{ $item->source ?? 'reddit' }}"

@@ -121,7 +121,12 @@ class SavedController extends Controller
 
     public function destroy(Request $request, string $redditId): JsonResponse
     {
-        $request->user()->savedItems()->where('reddit_id', $redditId)->get()->each->delete();
+        // Scoped by source when given: ids are only unique per source, so an
+        // unscoped delete could take out a same-id row from another source.
+        $request->user()->savedItems()
+            ->where('reddit_id', $redditId)
+            ->when($request->filled('source'), fn ($q) => $q->where('source', $request->input('source')))
+            ->get()->each->delete();
 
         return response()->json([
             'saved' => false,

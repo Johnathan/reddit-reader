@@ -17,7 +17,7 @@
                 <span>u/{{ $p['author'] }}</span>
             @endif
             <span>&middot;</span>
-            <span>{{ \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() }}</span>
+            <span>{{ isset($p['created_utc']) ? \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() : '' }}</span>
         </div>
 
         <details class="relative shrink-0">

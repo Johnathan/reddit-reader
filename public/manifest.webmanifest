@@ -1,7 +1,7 @@
 {
   "name": "Reddit Reader",
   "short_name": "Reader",
-  "description": "A fast, personal, dark-mode Reddit reader.",
+  "description": "A fast, personal reader for Reddit, Hacker News, and RSS.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

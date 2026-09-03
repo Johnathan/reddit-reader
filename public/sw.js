@@ -7,7 +7,7 @@
  * content. Only the static app-shell assets (icons, manifest, offline page)
  * are precached; everything else goes straight to the network.
  */
-const VERSION = 'v3';
+const VERSION = 'v4';
 const SHELL_CACHE = 'reader-shell-' + VERSION;
 
 const SHELL_ASSETS = [
@@ -43,16 +43,26 @@ self.addEventListener('fetch', (event) => {
   const sameOrigin = url.origin === self.location.origin;
 
   // Page navigations: network-first, fall back to the offline screen. We do
-  // NOT cache the response — authenticated pages must not be stored.
+  // NOT cache the response — authenticated pages must not be stored. If the
+  // shell cache was evicted too, answer *something*: an undefined respondWith
+  // value surfaces as a network error, not an offline screen.
   if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).catch(() => caches.match('/offline.html')));
+    event.respondWith(
+      fetch(request).catch(() =>
+        caches.match('/offline.html').then((hit) =>
+          hit || new Response('You are offline.', { status: 503, headers: { 'Content-Type': 'text/plain' } })
+        )
+      )
+    );
     return;
   }
 
   // Static shell assets: cache-first (they're versioned by content rarely).
+  // ignoreSearch: the manifest requests icons as ?v=N, but the precache list
+  // stores bare paths — an exact match would never hit the precached copies.
   if (sameOrigin && (url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest')) {
     event.respondWith(
-      caches.match(request).then((hit) => hit || fetch(request).then((res) => {
+      caches.match(request, { ignoreSearch: true }).then((hit) => hit || fetch(request).then((res) => {
         const copy = res.clone();
         caches.open(SHELL_CACHE).then((cache) => cache.put(request, copy));
         return res;

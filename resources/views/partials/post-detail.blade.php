@@ -74,7 +74,7 @@
             <span>&middot;</span>
             <span>u/{{ $p['author'] ?? '[deleted]' }}</span>
             <span>&middot;</span>
-            <span>{{ \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() }}</span>
+            <span>{{ isset($p['created_utc']) ? \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() : '' }}</span>
             @if ($p['stickied'] ?? false)
                 <span class="text-emerald-400 font-medium">pinned</span>
             @endif
@@ -136,9 +136,38 @@
                 'kind' => 'post', 'redditId' => $p['id'], 'subreddit' => $p['subreddit'],
                 'postId' => null, 'saved' => isset($myArchivedIds[$p['id']]), 'label' => true,
             ])
+            {{-- Post links work logged-out, so this hands out a viewable URL. --}}
+            <button type="button" data-share
+                    data-share-url="{{ route('posts.show', ['subreddit' => $p['subreddit'], 'id' => $p['id'], 'slug' => \Illuminate\Support\Str::slug($p['title'] ?? '')]) }}"
+                    data-share-title="{{ \Illuminate\Support\Str::limit($p['title'] ?? '', 290) }}"
+                    aria-label="Share a link to this post"
+                    class="tap-target flex items-center gap-1 hover:text-orange-500">
+                <svg viewBox="0 0 24 24" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/>
+                    <path d="M8.6 10.7l6.8-3.9M8.6 13.3l6.8 3.9"/>
+                </svg>
+                <span>Share</span>
+            </button>
         @endif
     </div>
 </article>
+
+{{-- Comment sort — only where the page passes it (the post page; reader
+     cards and shared links keep the default). Switching sort leaves a
+     focused subtree: you're re-ordering the whole discussion. --}}
+@isset($commentSort)
+    @if (!empty($comments))
+        <div class="flex items-center gap-1.5 text-xs mt-4 overflow-x-auto pb-1">
+            <span class="text-neutral-500 shrink-0">Sorted by</span>
+            @foreach (['best' => 'Best', 'top' => 'Top', 'new' => 'New', 'controversial' => 'Controversial', 'old' => 'Old', 'qa' => 'Q&A'] as $sKey => $sLabel)
+                <a href="{{ route('posts.show', ['subreddit' => $p['subreddit'], 'id' => $p['id'], 'slug' => \Illuminate\Support\Str::slug($p['title'] ?? ''), 'sort' => $sKey]) }}"
+                   class="px-2.5 py-1 rounded-full whitespace-nowrap {{ $commentSort === $sKey ? 'bg-orange-500 text-white' : 'bg-neutral-800 text-neutral-300 hover:bg-neutral-700' }}">
+                    {{ $sLabel }}
+                </a>
+            @endforeach
+        </div>
+    @endif
+@endisset
 
 <div class="mt-4">
     @forelse ($comments as $c)

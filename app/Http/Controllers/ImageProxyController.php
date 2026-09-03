@@ -31,11 +31,15 @@ class ImageProxyController extends Controller
         abort_unless(ImageProxy::isFetchable($url), 403, 'Not a proxiable URL.');
 
         try {
+            // No redirects: the allowlist check above covers only the URL we
+            // were handed. Followed blindly, a 302 from an allowed host could
+            // point anywhere — including at this network's own services.
+            // Direct imgur media URLs serve bytes without redirecting.
             $response = Http::withHeaders([
                 'User-Agent' => $request->userAgent() ?: 'Mozilla/5.0',
                 'Accept' => 'image/avif,image/webp,image/apng,image/*,video/*;q=0.8,*/*;q=0.5',
                 'Referer' => 'https://imgur.com/',
-            ])->timeout(15)->connectTimeout(5)->get($url);
+            ])->withoutRedirecting()->timeout(15)->connectTimeout(5)->get($url);
         } catch (ConnectionException $e) {
             abort(504, 'Upstream timed out.');
         }

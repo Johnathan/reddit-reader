@@ -463,6 +463,7 @@
             const row = document.createElement('div');
             row.dataset.dockRow = '';
             row.dataset.postId = item.post_id;
+            row.dataset.source = item.source || 'reddit';
             row.className = 'flex items-start gap-2 px-3 py-2 hover:bg-neutral-800/60';
             const link = document.createElement('a');
             link.href = item.url;
@@ -472,12 +473,13 @@
             title.textContent = item.title;
             const meta = document.createElement('span');
             meta.className = 'block text-[11px] text-neutral-500 mt-0.5';
-            meta.textContent = 'r/' + item.subreddit;
+            meta.textContent = item.label || ('r/' + item.subreddit);
             link.appendChild(title); link.appendChild(meta);
             const del = document.createElement('button');
             del.type = 'button';
             del.dataset.dockRemove = '';
             del.dataset.postId = item.post_id;
+            del.dataset.source = item.source || 'reddit';
             del.setAttribute('aria-label', 'Remove from reading list');
             del.className = 'shrink-0 p-1 -mr-1 text-neutral-600 hover:text-red-400';
             del.innerHTML = '<svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>';
@@ -503,13 +505,15 @@
                 if (save.__busy) return;
                 save.__busy = true;
                 const d = save.dataset;
-                const wasSaved = d.saved === '1';
+                // The state attribute is data-inlist (see paintLaterButton);
+                // reading d.saved here once made un-saving impossible.
+                const wasSaved = d.inlist === '1';
                 paintAllLaterButtons(d.postId, !wasSaved);   // optimistic
                 try {
                     let state;
                     if (wasSaved) {
                         state = await readingApi('/reading-list/' + encodeURIComponent(d.postId), 'POST',
-                            new URLSearchParams({ _method: 'DELETE' }));
+                            new URLSearchParams({ _method: 'DELETE', source: d.source || 'reddit' }));
                         dropRows(d.postId);
                     } else {
                         state = await readingApi(@json(route('reading.store')), 'POST', new URLSearchParams({
@@ -550,7 +554,7 @@
                 paintAllLaterButtons(id, false);
                 try {
                     updateDock(await readingApi('/reading-list/' + encodeURIComponent(id), 'POST',
-                        new URLSearchParams({ _method: 'DELETE' })));
+                        new URLSearchParams({ _method: 'DELETE', source: remove.dataset.source || 'reddit' })));
                 } catch (err) {
                     showToast('Could not remove that.', true);
                 }
@@ -562,7 +566,8 @@
             if (read) {
                 e.preventDefault();
                 try {
-                    const state = await readingApi('/reading-list/' + encodeURIComponent(read.dataset.postId) + '/read', 'POST');
+                    const state = await readingApi('/reading-list/' + encodeURIComponent(read.dataset.postId) + '/read', 'POST',
+                        new URLSearchParams({ source: read.dataset.source || 'reddit' }));
                     read.setAttribute('aria-pressed', state.read ? 'true' : 'false');
                     read.classList.toggle('text-emerald-400', state.read);
                     read.classList.toggle('hover:text-emerald-400', !state.read);
@@ -630,7 +635,7 @@
                 let res;
                 if (on) {
                     res = await readingApi('/saved/' + encodeURIComponent(d.redditId), 'POST',
-                        new URLSearchParams({ _method: 'DELETE' }));
+                        new URLSearchParams({ _method: 'DELETE', source: d.source || 'reddit' }));
                     const row = btn.closest('[data-saved-row]');
                     if (row) { row.style.transition = 'opacity .2s'; row.style.opacity = '0'; setTimeout(() => row.remove(), 200); }
                 } else {
@@ -647,6 +652,29 @@
             } finally {
                 btn.__busy = false;
                 btn.classList.remove('opacity-50');
+            }
+        });
+
+        // ---- share a post's public link -------------------------------------
+        // Post URLs are viewable logged-out, so handing one out is safe. The
+        // native share sheet where there is one (iOS/Android PWA), otherwise
+        // straight to the clipboard.
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('[data-share]');
+            if (!btn) return;
+            e.preventDefault();
+            const url = btn.dataset.shareUrl;
+            if (navigator.share) {
+                try {
+                    await navigator.share({ title: btn.dataset.shareTitle || document.title, url: url });
+                } catch (err) { /* user closed the sheet — not an error */ }
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(url);
+                showToast('Link copied — anyone can open it');
+            } catch (err) {
+                showToast('Could not copy the link.', true);
             }
         });
 
@@ -1055,18 +1083,22 @@
             if (!panel) return;
 
             if (open && panel.dataset.loaded !== '1') {
-                panel.dataset.loaded = '1';
-
                 // RSS cards: the expando IS the article, fetched on first open.
-                if (btn.dataset.fetch) {
+                // `loaded` is only set once the fetch lands — flagging it up
+                // front made a failed load permanent: re-opening the card
+                // would show the error forever instead of retrying.
+                if (btn.dataset.fetch && panel.dataset.loading !== '1') {
+                    panel.dataset.loading = '1';
                     panel.innerHTML = '<p class="text-sm text-neutral-500 py-3">Loading article&hellip;</p>';
                     fetch(btn.dataset.fetch, { headers: { 'Accept': 'text/html' } })
                         .then(function (r) { if (!r.ok) throw new Error('failed'); return r.text(); })
-                        .then(function (html) { panel.innerHTML = html; })
+                        .then(function (html) { panel.innerHTML = html; panel.dataset.loaded = '1'; })
                         .catch(function () {
-                            panel.innerHTML = '<p class="text-sm text-red-300 py-3">Could not load the article.</p>';
-                        });
-                } else {
+                            panel.innerHTML = '<p class="text-sm text-red-300 py-3">Could not load the article. Close and reopen to retry.</p>';
+                        })
+                        .finally(function () { panel.dataset.loading = '0'; });
+                } else if (!btn.dataset.fetch) {
+                    panel.dataset.loaded = '1';
                     let media = {};
                     try { media = JSON.parse(btn.dataset.media || '{}'); } catch (e) {}
                     const nsfw = btn.dataset.nsfw === '1';
@@ -1086,6 +1118,11 @@
 
         function setExpandAll(open, scope) {
             (scope || document).querySelectorAll('[data-expando]').forEach(function (b) {
+                // Skip RSS article cards when opening: each one costs a
+                // server-side extraction, so "expand all" on a newsy feed
+                // would fire a burst of them. Media expandos are free until
+                // played; articles stay tap-to-open. Closing closes them all.
+                if (open && b.dataset.fetch) return;
                 setExpanded(b, open);
             });
         }

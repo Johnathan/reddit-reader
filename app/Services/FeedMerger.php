@@ -48,13 +48,23 @@ class FeedMerger
                 return;   // exhausted on an earlier page
             }
 
+            // 'start' is a failed page one carried forward (see the catch):
+            // a real position that fetches from the top, unlike null, which
+            // on later pages means "this source is done".
+            if ($cursor === 'start') {
+                $cursor = null;
+            }
+
             try {
                 [$items, $nextCursor] = $fetch($cursor);
                 $streams[$key] = $items;
                 $next[$key] = $nextCursor ?? 'end';
             } catch (RedditException $e) {
                 $errors[] = $e->getMessage();
-                $next[$key] = $cursor ?? 'end';   // retryable next page
+                // Hold position so the next "load more" retries this page.
+                // A failed page one has no cursor to hold — carry 'start',
+                // never 'end', or one hiccup retires the source for good.
+                $next[$key] = $cursor ?? 'start';
             }
         };
 

@@ -5,7 +5,13 @@
         <span class="px-1.5 py-0.5 rounded {{ $item->isComment() ? 'bg-neutral-800 text-neutral-300' : 'bg-emerald-400/15 text-emerald-400' }}">
             {{ $item->isComment() ? 'comment' : 'post' }}
         </span>
-        <a href="{{ route('subreddit.show', $item->subreddit) }}" class="text-neutral-300 hover:text-neutral-900 font-medium">r/{{ $item->subreddit }}</a>
+        {{-- Only Reddit items live in a subreddit; for HN/RSS the column holds
+             the source key, so a r/{...} link would 404 on Reddit. --}}
+        @if (($item->source ?? 'reddit') === 'reddit')
+            <a href="{{ route('subreddit.show', $item->subreddit) }}" class="text-neutral-300 hover:text-neutral-900 font-medium">r/{{ $item->subreddit }}</a>
+        @else
+            <span class="text-neutral-300 font-medium">{{ $item->sourceLabel() }}</span>
+        @endif
         <span>&middot;</span>
         <span>u/{{ $item->author ?? '[deleted]' }}</span>
         <span>&middot;</span>
@@ -75,6 +81,7 @@
         </details>
 
         <button type="button" data-archive data-kind="{{ $item->kind }}" data-reddit-id="{{ $item->reddit_id }}"
+                data-source="{{ $item->source ?? 'reddit' }}"
                 data-subreddit="{{ $item->subreddit }}" data-post-id="{{ $item->post_id }}" data-archived="1"
                 class="text-neutral-500 hover:text-red-400">Remove</button>
     </div>

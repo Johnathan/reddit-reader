@@ -54,6 +54,20 @@ class ReadingListItem extends Model
         };
     }
 
+    /**
+     * What a row shows as this item's origin: 'r/php', 'Hacker News',
+     * 'BBC NI'. For non-Reddit sources `subreddit` holds the source key, so
+     * rendering r/{subreddit} everywhere mislabels them.
+     */
+    public function sourceLabel(): string
+    {
+        return match ($this->source) {
+            'hn' => 'Hacker News',
+            'reddit', null => 'r/'.$this->subreddit,
+            default => \App\Services\RssSource::find($this->source)['name'] ?? $this->subreddit,
+        };
+    }
+
     /** Thumbnails are snapshots, so imgur ones still need the proxy. */
     public function thumbnailUrl(): ?string
     {

@@ -31,8 +31,8 @@
             @foreach ($items as $i => $item)
                 <section data-reader-card data-index="{{ $i }}"
                          data-post-id="{{ $item->post_id }}"
-                         data-url="{{ route('reading.content', $item->post_id) }}"
-                         data-mark-url="{{ route('reading.markRead', $item->post_id) }}"
+                         data-url="{{ route('reading.content', ['postId' => $item->post_id, 'source' => $item->source ?? 'reddit']) }}"
+                         data-mark-url="{{ route('reading.markRead', ['postId' => $item->post_id, 'source' => $item->source ?? 'reddit']) }}"
                          data-last="{{ $loop->last ? '1' : '0' }}"
                          class="reader-card shrink-0 w-full snap-center snap-always overflow-y-auto overscroll-contain px-3">
                     <div class="max-w-2xl mx-auto py-2">
@@ -47,7 +47,7 @@
                         </div>
 
                         {{-- Snapshot header, always visible even before content loads. --}}
-                        <div class="text-xs text-neutral-500 mb-1">r/{{ $item->subreddit }}</div>
+                        <div class="text-xs text-neutral-500 mb-1">{{ $item->sourceLabel() }}</div>
                         <h2 class="font-semibold leading-snug mb-3">{{ $item->title }}</h2>
 
                         <div data-card-body>

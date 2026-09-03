@@ -62,7 +62,7 @@ class ReadingListController extends Controller
      */
     public function content(Request $request, string $postId): View
     {
-        $item = $request->user()->readingList()->where('post_id', $postId)->firstOrFail();
+        $item = $this->itemQuery($request, $postId)->firstOrFail();
 
         $error = null;
         $post = null;
@@ -106,7 +106,7 @@ class ReadingListController extends Controller
     /** Mark read as the reader advances. Idempotent — never toggles back. */
     public function markRead(Request $request, string $postId): JsonResponse
     {
-        $item = $request->user()->readingList()->where('post_id', $postId)->firstOrFail();
+        $item = $this->itemQuery($request, $postId)->firstOrFail();
 
         if (! $item->isRead()) {
             $item->update(['read_at' => now()]);
@@ -157,7 +157,7 @@ class ReadingListController extends Controller
     /** Remove a post from the list. */
     public function destroy(Request $request, string $postId): JsonResponse
     {
-        $request->user()->readingList()->where('post_id', $postId)->delete();
+        $this->itemQuery($request, $postId)->delete();
 
         return $this->state($request, ['saved' => false, 'message' => 'Removed from reading list']);
     }
@@ -165,7 +165,7 @@ class ReadingListController extends Controller
     /** Mark read / unread — the "done with this one" toggle. */
     public function toggleRead(Request $request, string $postId): JsonResponse
     {
-        $item = $request->user()->readingList()->where('post_id', $postId)->firstOrFail();
+        $item = $this->itemQuery($request, $postId)->firstOrFail();
 
         $item->update(['read_at' => $item->isRead() ? null : now()]);
 
@@ -210,10 +210,26 @@ class ReadingListController extends Controller
     {
         return [
             'post_id' => $item->post_id,
+            'source' => $item->source,
             'title' => $item->title,
             'subreddit' => $item->subreddit,
+            'label' => $item->sourceLabel(),
             'url' => $item->url(),
             'thumbnail' => $item->thumbnailUrl(),
         ];
+    }
+
+    /**
+     * One item by id, scoped by source when the client says which. IDs are
+     * only unique per source (the unique key is user+source+post_id), so an
+     * unscoped match could act on a same-id row from a different source.
+     *
+     * @return \Illuminate\Database\Eloquent\Relations\HasMany<ReadingListItem, \App\Models\User>
+     */
+    private function itemQuery(Request $request, string $postId)
+    {
+        return $request->user()->readingList()
+            ->where('post_id', $postId)
+            ->when($request->filled('source'), fn ($q) => $q->where('source', $request->input('source')));
     }
 }

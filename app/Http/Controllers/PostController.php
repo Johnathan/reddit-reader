@@ -9,6 +9,19 @@ use Illuminate\View\View;
 
 class PostController extends Controller
 {
+    /**
+     * Comment sorts the page offers, UI key => Reddit API value. "Best" is
+     * Reddit's default and its API name is the legacy "confidence".
+     */
+    public const COMMENT_SORTS = [
+        'best' => 'confidence',
+        'top' => 'top',
+        'new' => 'new',
+        'controversial' => 'controversial',
+        'old' => 'old',
+        'qa' => 'qa',
+    ];
+
     public function __construct(protected Reddit $reddit) {}
 
     /**
@@ -26,8 +39,16 @@ class PostController extends Controller
         $focus = $request->string('comment')->toString();
         $focus = preg_match('/^[A-Za-z0-9]+$/', $focus) ? $focus : null;
 
+        $sort = strtolower($request->string('sort')->toString());
+        $sort = array_key_exists($sort, self::COMMENT_SORTS) ? $sort : 'best';
+
         try {
             $params = $focus ? ['comment' => $focus, 'context' => 0] : [];
+            // "best" is what Reddit serves anyway; only a departure needs the
+            // param, which also keeps existing cache entries warm.
+            if ($sort !== 'best') {
+                $params['sort'] = self::COMMENT_SORTS[$sort];
+            }
             $data = $this->reddit->comments($subreddit, $id, $params);
 
             $post = $data[0]['data']['children'][0]['data'] ?? null;
@@ -52,6 +73,7 @@ class PostController extends Controller
             'comments' => $comments,
             'error' => $error,
             'focusComment' => $focus,
+            'commentSort' => $sort,
         ]);
     }
 }

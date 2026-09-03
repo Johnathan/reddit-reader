@@ -32,6 +32,8 @@ class SourceController extends Controller
         $user->disabled_sources = $disabled;
         $user->save();
 
-        return redirect()->route('home');
+        // Back to wherever the toggle was flipped, keeping its sort/query —
+        // a bare route('home') would reset a top/week feed to hot.
+        return back(fallback: route('home'));
     }
 }

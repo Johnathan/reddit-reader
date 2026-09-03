@@ -96,7 +96,10 @@ class HackerNews
 
         return match ($sort) {
             // Most-loved of the last day, closest analogue to reddit top/day.
-            'top' => ['/search', ['tags' => 'story', 'numericFilters' => 'created_at_i>'.(now()->getTimestamp() - 86400), 'hitsPerPage' => 20, 'page' => $page]],
+            // The window's edge is rounded to the hour: a live timestamp here
+            // would land in the cache key, so no two requests could ever share
+            // a cache entry — and page 2 would use a different window.
+            'top' => ['/search', ['tags' => 'story', 'numericFilters' => 'created_at_i>'.(intdiv(now()->getTimestamp(), 3600) * 3600 - 86400), 'hitsPerPage' => 20, 'page' => $page]],
             // The actual HN front page, in rank order.
             default => ['/search', ['tags' => 'front_page', 'hitsPerPage' => 20, 'page' => $page]],
         };

@@ -8,6 +8,7 @@
     {{-- Shared links are for the people they're sent to, not for crawlers. --}}
     <meta name="robots" content="noindex, nofollow">
     <title>@yield('title', 'reader')</title>
+    @yield('head')
 
     <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png?v=3">
     <link rel="icon" type="image/png" sizes="16x16" href="/icons/favicon-16.png?v=3">

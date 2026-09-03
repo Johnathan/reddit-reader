@@ -128,7 +128,7 @@
                     <span>u/{{ $p['author'] }}</span>
                     <span>&middot;</span>
                 @endif
-                <span>{{ \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() }}</span>
+                <span>{{ isset($p['created_utc']) ? \Carbon\Carbon::createFromTimestamp($p['created_utc'])->diffForHumans() : '' }}</span>
                 @if ($p['stickied'] ?? false)
                     <span class="text-emerald-400 font-medium">pinned</span>
                 @endif

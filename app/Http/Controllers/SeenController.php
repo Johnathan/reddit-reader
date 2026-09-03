@@ -14,7 +14,7 @@ use Illuminate\Support\Carbon;
 class SeenController extends Controller
 {
     /** 'reddit:abc12' / 'hn:41231' / 'rss:bbcni:d41d8cd9' */
-    protected const KEY_PATTERN = '/^(reddit|hn|rss)[A-Za-z0-9:_-]{1,110}$/';
+    protected const KEY_PATTERN = '/^(reddit|hn|rss):[A-Za-z0-9:_-]{1,110}$/';
 
     public function store(Request $request): JsonResponse
     {
@@ -43,23 +43,29 @@ class SeenController extends Controller
 
         $user = $request->user();
         $existing = array_flip($user->seenItems()->pluck('seen_key')->all());
-        $imported = 0;
+        $rows = [];
 
         foreach (array_slice($items, 0, 5000, preserve_keys: true) as $key => $rec) {
             if (! is_string($key) || ! preg_match(self::KEY_PATTERN, $key) || isset($existing[$key])) {
                 continue;
             }
 
-            $user->seenItems()->create([
+            $rows[] = [
+                'user_id' => $user->id,
                 'seen_key' => $key,
                 'comments_seen' => is_numeric($rec['c'] ?? null) ? max(0, (int) $rec['c']) : null,
                 'last_seen_at' => is_numeric($rec['t'] ?? null)
                     ? Carbon::createFromTimestampMs((int) $rec['t'])
                     : now(),
-            ]);
-            $imported++;
+            ];
         }
 
-        return response()->json(['ok' => true, 'imported' => $imported]);
+        // Bulk insert — this can be thousands of rows, and one query per row
+        // made the one-time migration a several-second request.
+        foreach (array_chunk($rows, 500) as $chunk) {
+            \App\Models\SeenItem::insert($chunk);
+        }
+
+        return response()->json(['ok' => true, 'imported' => count($rows)]);
     }
 }

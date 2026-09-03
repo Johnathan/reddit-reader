@@ -18,15 +18,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
-        // Deliberately narrow: normal form posts should redirect back with
-        // their errors, not get JSON. The reading-list endpoints are the
-        // exception — they are only ever called by fetch(), so a validation
-        // failure must come back as 422 JSON rather than a 302 to a page the
-        // caller cannot use.
-        // ...but not the GET, which is a normal page and should still redirect
-        // a logged-out visitor to the login screen.
+        // Normal form posts should redirect back with their errors, not get
+        // JSON — which expectsJson() already handles: every fetch() caller in
+        // the app sends Accept: application/json, browsers' form posts don't.
+        // (Overriding this hook REPLACES that default, so it must be restated
+        // — leaving it out once sent /seen validation failures off as 302s.)
+        // The reading-list/saved mutations are pinned as JSON by path as well,
+        // belt-and-braces, since their callers can't use a redirect at all;
+        // their GETs are normal pages and still redirect a logged-out visitor
+        // to the login screen.
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*')
+            fn (Request $request) => $request->expectsJson()
+                || $request->is('api/*')
                 || ($request->is('reading-list', 'reading-list/*') && ! $request->isMethod('GET'))
                 || ($request->is('saved', 'saved/*') && ! $request->isMethod('GET') && ! $request->is('saved/folders*')),
         );

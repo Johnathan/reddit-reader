@@ -15,7 +15,7 @@
             <div class="text-xs text-neutral-500 mb-1 flex items-center gap-1.5">
                 <span class="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 font-semibold text-[10px]">{{ $sourceName }}</span>
                 <span>&middot;</span>
-                <span>{{ \Carbon\Carbon::createFromTimestamp($entry['created_utc'])->diffForHumans() }}</span>
+                <span>{{ isset($entry['created_utc']) ? \Carbon\Carbon::createFromTimestamp($entry['created_utc'])->diffForHumans() : '' }}</span>
             </div>
 
             <h1 class="text-lg font-semibold leading-snug mb-1">{{ $article['title'] ?? $entry['title'] }}</h1>

@@ -114,6 +114,20 @@ class SavedItem extends Model
         return $this->belongsToMany(Tag::class);
     }
 
+    /**
+     * What a row shows as this item's origin: 'r/php', 'Hacker News',
+     * 'BBC NI'. For non-Reddit sources `subreddit` holds the source key, so
+     * rendering r/{subreddit} everywhere mislabels them.
+     */
+    public function sourceLabel(): string
+    {
+        return match ($this->source) {
+            'hn' => 'Hacker News',
+            'reddit', null => 'r/'.$this->subreddit,
+            default => \App\Services\RssSource::find($this->source)['name'] ?? $this->subreddit,
+        };
+    }
+
     public function isComment(): bool
     {
         return $this->kind === self::KIND_COMMENT;

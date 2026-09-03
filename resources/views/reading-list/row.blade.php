@@ -10,7 +10,7 @@
 
     <div class="min-w-0 flex-1">
         <div class="text-xs text-neutral-500 mb-1">
-            r/{{ $item->subreddit }} &middot; saved {{ $item->created_at->diffForHumans() }}
+            {{ $item->sourceLabel() }} &middot; saved {{ $item->created_at->diffForHumans() }}
         </div>
 
         <a href="{{ $item->url() }}" class="font-medium leading-snug hover:text-orange-300">{{ $item->title }}</a>
@@ -19,7 +19,7 @@
             <span>&#9650; {{ \App\Services\Reddit::formatScore($item->score) }}</span>
             <a href="{{ $item->url() }}" class="hover:text-neutral-900">&#128172; {{ \App\Services\Reddit::formatScore($item->num_comments) }} comments</a>
 
-            <button type="button" data-reading-read data-post-id="{{ $item->post_id }}"
+            <button type="button" data-reading-read data-post-id="{{ $item->post_id }}" data-source="{{ $item->source ?? 'reddit' }}"
                     aria-pressed="{{ $item->isRead() ? 'true' : 'false' }}"
                     class="flex items-center gap-1 {{ $item->isRead() ? 'text-emerald-400' : 'hover:text-emerald-400' }}">
                 <svg viewBox="0 0 24 24" class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
@@ -28,7 +28,7 @@
                 <span data-reading-read-label>{{ $item->isRead() ? 'Read' : 'Mark read' }}</span>
             </button>
 
-            <button type="button" data-reading-remove data-post-id="{{ $item->post_id }}"
+            <button type="button" data-reading-remove data-post-id="{{ $item->post_id }}" data-source="{{ $item->source ?? 'reddit' }}"
                     class="ml-auto text-neutral-500 hover:text-red-400">Remove</button>
         </div>
     </div>

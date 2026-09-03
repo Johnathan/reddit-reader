@@ -26,7 +26,9 @@ class Reddit
 
     protected ?CookieJar $jar = null;
 
-    protected const SORTS = ['hot', 'new', 'top', 'rising', 'best'];
+    // 'best' is deliberately absent: it's a front-page-only sort, and
+    // /r/{sub}/best.json is not a thing — it falls back to hot here.
+    protected const SORTS = ['hot', 'new', 'top', 'rising', 'controversial'];
 
     protected const TIME_RANGES = ['hour', 'day', 'week', 'month', 'year', 'all'];
 
@@ -395,7 +397,9 @@ class Reddit
     public function about(string $subreddit): ?array
     {
         $subreddit = strtolower($subreddit);
-        $cacheKey = 'reddit:about:'.$subreddit;
+        // Hashed like every sibling key: {subreddit} is an unconstrained route
+        // segment, so anything could land in it.
+        $cacheKey = 'reddit:about:'.md5($subreddit);
 
         return Cache::remember($cacheKey, 3600, function () use ($subreddit) {
             $data = $this->request("/r/{$subreddit}/about.json", ['raw_json' => 1]);
@@ -613,6 +617,12 @@ class Reddit
 
         $html = preg_replace('#<script\b[^>]*>.*?</script>#is', '', $html) ?? '';
         $html = preg_replace('#\son\w+\s*=\s*(".*?"|\'.*?\'|[^\s>]+)#is', '', $html) ?? '';
+        // javascript:/vbscript: URLs execute where a link merely navigates —
+        // neutralise them in any attribute. data: is only blocked where it
+        // navigates (href/formaction): data:image/* in a src is legitimate
+        // in extracted articles and can't run script from an <img>.
+        $html = preg_replace('#\s(href|src|xlink:href|formaction)\s*=\s*(["\']?)\s*(javascript|vbscript)\s*:#is', ' $1=$2#blocked:', $html) ?? '';
+        $html = preg_replace('#\s(href|formaction)\s*=\s*(["\']?)\s*data\s*:#is', ' $1=$2#blocked:', $html) ?? '';
 
         return $html;
     }

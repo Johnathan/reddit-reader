@@ -56,6 +56,18 @@
     $galleryImgs = \App\Services\ImageProxy::wrapAll($galleryImgs);
     $videoUrl = \App\Services\ImageProxy::wrap($videoUrl);
     $imageUrl = \App\Services\ImageProxy::wrap($imageUrl);
+
+    // Gallery and link posts can carry body text too, not just self posts.
+    // A removal marker is not a body: the notice below says it properly.
+    $bodyHtml = in_array($p['selftext'] ?? null, ['[removed]', '[deleted]'], true)
+        ? '' : \App\Services\Reddit::sanitizeHtml($p['selftext_html'] ?? null);
+    $hasMedia = ! $isSelf && ($galleryImgs || $videoUrl || $imageUrl);
+
+    // Crossposts: the Reddit service has already copied the original's text
+    // and media in; this is just where it came from (and where its own
+    // discussion lives).
+    $xpost = $p['crosspost_parent_list'][0] ?? null;
+    $removalNotice = \App\Services\Reddit::removalNotice($p);
 @endphp
 
 @isset($focusComment)
@@ -98,29 +110,55 @@
 
     <h1 class="text-lg font-semibold leading-snug mb-2">{{ $p['title'] }}</h1>
 
-    @if ($isSelf)
-        @if (!empty($p['selftext_html']))
-            <div class="reddit-html text-[15px] leading-relaxed">
-                {!! \App\Services\Reddit::sanitizeHtml($p['selftext_html']) !!}
-            </div>
-        @endif
-    @elseif (!empty($galleryImgs))
-        <div class="space-y-2">
-            @foreach ($galleryImgs as $g)
-                <img src="{{ $g }}" loading="lazy" alt="" class="w-full rounded-lg {{ $nsfwClass }}"
-                     @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
-            @endforeach
+    @if ($xpost && ! empty($xpost['subreddit']) && ! empty($xpost['id']))
+        <div class="text-xs text-neutral-500 mb-2">
+            &#8644; Crossposted from
+            @if ($publicView)
+                <span class="text-neutral-300">r/{{ $xpost['subreddit'] }}</span>
+            @else
+                <a href="{{ route('posts.show', ['subreddit' => $xpost['subreddit'], 'id' => $xpost['id'], 'slug' => \Illuminate\Support\Str::slug($xpost['title'] ?? '')]) }}"
+                   class="text-orange-400 hover:underline">r/{{ $xpost['subreddit'] }}</a>
+            @endif
+            @if (($xpost['num_comments'] ?? 0) > 0)
+                <span>&middot; {{ \App\Services\Reddit::formatScore($xpost['num_comments']) }} {{ $xpost['num_comments'] === 1 ? 'comment' : 'comments' }} there</span>
+            @endif
         </div>
-    @elseif ($videoUrl)
-        <video controls playsinline preload="metadata" class="w-full rounded-lg {{ $nsfwClass }}"
-               @if ($videoHls) data-video-hls="{{ $videoHls }}" data-video-fallback="{{ $videoUrl }}" @endif
-               @if ($imageUrl) poster="{{ $imageUrl }}" @endif
-               @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
-            <source src="{{ $videoUrl }}" type="video/mp4">
-        </video>
-    @elseif ($imageUrl)
-        <img src="{{ $imageUrl }}" loading="lazy" alt="" class="w-full rounded-lg {{ $nsfwClass }}"
-             @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
+    @endif
+
+    @if ($removalNotice)
+        <div class="mb-2 rounded-lg border border-neutral-800 bg-neutral-900 px-3 py-2.5 text-sm text-neutral-400">
+            {{ $removalNotice }}
+            @if (! $hasMedia && $bodyHtml === '')
+                Reddit no longer has its text or images, so there's nothing to show.
+            @endif
+        </div>
+    @endif
+
+    @if ($hasMedia)
+        @if (!empty($galleryImgs))
+            <div class="space-y-2">
+                @foreach ($galleryImgs as $g)
+                    <img src="{{ $g }}" loading="lazy" alt="" class="w-full rounded-lg {{ $nsfwClass }}"
+                         @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
+                @endforeach
+            </div>
+        @elseif ($videoUrl)
+            <video controls playsinline preload="metadata" class="w-full rounded-lg {{ $nsfwClass }}"
+                   @if ($videoHls) data-video-hls="{{ $videoHls }}" data-video-fallback="{{ $videoUrl }}" @endif
+                   @if ($imageUrl) poster="{{ $imageUrl }}" @endif
+                   @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
+                <source src="{{ $videoUrl }}" type="video/mp4">
+            </video>
+        @else
+            <img src="{{ $imageUrl }}" loading="lazy" alt="" class="w-full rounded-lg {{ $nsfwClass }}"
+                 @if ($isNsfw) onclick="{{ $nsfwToggle }}" @endif>
+        @endif
+    @endif
+
+    @if ($bodyHtml !== '')
+        <div class="reddit-html text-[15px] leading-relaxed {{ $hasMedia ? 'mt-3' : '' }}">
+            {!! $bodyHtml !!}
+        </div>
     @endif
 
     @if (! $isSelf && !empty($p['domain']) && !str_starts_with($p['domain'], 'self.'))

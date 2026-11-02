@@ -45,9 +45,11 @@ class Reddit
         $subredditOrMulti = strtolower($subredditOrMulti);
         $cacheKey = 'reddit:listing:'.md5($subredditOrMulti.'|'.$sort.'|'.json_encode($query));
 
-        return Cache::remember($cacheKey, 90, function () use ($subredditOrMulti, $sort, $query) {
+        $data = Cache::remember($cacheKey, 90, function () use ($subredditOrMulti, $sort, $query) {
             return $this->request("/r/{$subredditOrMulti}/{$sort}.json", $query);
         });
+
+        return self::withCrosspostContentIn($data);
     }
 
     /**
@@ -76,9 +78,122 @@ class Reddit
         $subreddit = strtolower($subreddit);
         $cacheKey = 'reddit:comments:'.md5($subreddit.'|'.$id.'|'.json_encode($query));
 
-        return Cache::remember($cacheKey, 300, function () use ($subreddit, $id, $query) {
+        $data = Cache::remember($cacheKey, 300, function () use ($subreddit, $id, $query) {
             return $this->request("/r/{$subreddit}/comments/{$id}.json", $query);
         });
+
+        if (is_array($data[0] ?? null)) {
+            $data[0] = self::withCrosspostContentIn($data[0]);
+        }
+
+        return $data;
+    }
+
+    /**
+     * Fields that hold what a post shows (its text and media), as opposed to
+     * who posted it where and how it's doing.
+     */
+    protected const CONTENT_FIELDS = [
+        'is_self', 'selftext', 'selftext_html', 'is_gallery', 'gallery_data', 'media_metadata',
+        'media', 'secure_media', 'media_embed', 'secure_media_embed', 'preview', 'post_hint',
+        'is_video', 'url', 'domain',
+    ];
+
+    /**
+     * Give a crosspost the original's text and media.
+     *
+     * A crosspost is only a pointer: Reddit leaves its gallery, video and body
+     * text on the original (in crosspost_parent_list), so read raw it renders
+     * as a bare title. The original's removal marker ("[removed]") is not
+     * copied — there's no content behind it. See removalNotice() for that.
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     * @return array<string, mixed>
+     */
+    public static function withCrosspostContent(array $post): array
+    {
+        $parent = $post['crosspost_parent_list'][0] ?? null;
+
+        if (! is_array($parent)) {
+            return $post;
+        }
+
+        $removed = in_array($parent['selftext'] ?? null, ['[removed]', '[deleted]'], true);
+
+        foreach (self::CONTENT_FIELDS as $field) {
+            if ($removed && in_array($field, ['selftext', 'selftext_html'], true)) {
+                continue;
+            }
+            if (array_key_exists($field, $parent) && $parent[$field] !== null && $parent[$field] !== '' && $parent[$field] !== []) {
+                $post[$field] = $parent[$field];
+            }
+        }
+
+        return $post;
+    }
+
+    /**
+     * withCrosspostContent() over every post in a listing.
+     *
+     * @param  array<string, mixed>|null  $listing
+     * @return array<string, mixed>|null
+     */
+    protected static function withCrosspostContentIn(?array $listing): ?array
+    {
+        foreach ($listing['data']['children'] ?? [] as $i => $child) {
+            if (($child['kind'] ?? 't3') === 't3' && is_array($child['data'] ?? null)) {
+                $listing['data']['children'][$i]['data'] = self::withCrosspostContent($child['data']);
+            }
+        }
+
+        return $listing;
+    }
+
+    /**
+     * Why a post, or the original it crossposts, was taken down — in plain
+     * words — or null if it wasn't. Reddit strips a removed post's text and
+     * media for everyone, so there is nothing left to fetch.
+     *
+     * @param  array<string, mixed>  $post  A listing child's `data` payload.
+     */
+    public static function removalNotice(array $post): ?string
+    {
+        $parent = $post['crosspost_parent_list'][0] ?? null;
+
+        if (($how = self::removedHow($post)) !== null) {
+            $sub = 'r/'.($post['subreddit'] ?? '?');
+
+            return 'This post was '.self::removedBy($how, "the {$sub} moderators").'.';
+        }
+
+        if (is_array($parent) && ($how = self::removedHow($parent)) !== null) {
+            $sub = 'r/'.($parent['subreddit'] ?? '?');
+
+            return "The original post in {$sub} was ".self::removedBy($how, 'its moderators').'.';
+        }
+
+        return null;
+    }
+
+    /** @param  array<string, mixed>  $post */
+    protected static function removedHow(array $post): ?string
+    {
+        $how = $post['removed_by_category'] ?? null;
+
+        if ($how === null && in_array($post['selftext'] ?? null, ['[removed]', '[deleted]'], true)) {
+            $how = $post['selftext'] === '[deleted]' ? 'deleted' : 'moderator';
+        }
+
+        return $how;
+    }
+
+    protected static function removedBy(string $how, string $mods): string
+    {
+        return match ($how) {
+            'deleted', 'author' => 'deleted by its author',
+            'moderator', 'automod_filtered' => "removed by {$mods}",
+            default => 'removed by Reddit',
+        };
     }
 
     /**
